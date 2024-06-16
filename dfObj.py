@@ -102,7 +102,7 @@ class dfObj():
         if new_df.empty:
             raise IncompatibleDataframes("Dataframes are incompatible")
         
-        new_name = self.name + ' merged with ' + add_df.name
+        new_name = self.name + 'MERGE' + add_df.name
         new_dtype = 'OD' 
         
         new_obj = dfObj(new_name, new_df, new_dtype)
@@ -217,9 +217,12 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
 def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.DataFrame:
     """Merges two dataframes based on the station id column.
     The first column in df2 (the stations data) must be station_id"""
-    st_orig = st.rename(renamer(st.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
-    st_dest = st.rename(renamer(st.columns, '_dest', 'station_id'), axis=1)
-
+    if not od:
+        st_orig = st.rename(renamer(st.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
+        st_dest = st.rename(renamer(st.columns, '_dest', 'station_id'), axis=1)
+    else: # if od is passed
+        st_orig = st.copy()
+        st_dest = st.copy()
     orig_id_label = find_groupby(tr, 'start station id') # returns label
     dest_id_label = find_groupby(tr, 'end station id')
     st_orig[orig_id_label] = st_orig['station_id']
@@ -234,7 +237,7 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.Data
         print(dest_count)
         
         st_orig = pd.merge(st_orig, orig_count, on=orig_id_label, how='left')
-        st_dest = pd.merge(st_dest, dest_count, on=dest_id_label, how='left')
+        st_dest = pd.merge(st_dest.filter(['station_id', dest_id_label]), dest_count, on=dest_id_label, how='left')
 
         output = pd.merge(st_orig, st_dest, on='station_id', how='outer')
         output.fillna({orig_count_label: 0, dest_count_label: 0}, inplace=True)
@@ -246,6 +249,7 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.Data
     # remove station_id columns since not necessary
     # TODO drop station_id???
     # output.drop('station_id', axis=1, inplace=True) # both have _x and _y
+    
     output = pd.merge(tr, st_orig, on=orig_id_label, how='left')
     output = pd.merge(output, st_dest, on = dest_id_label, how='left')
 
