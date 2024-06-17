@@ -12,6 +12,9 @@ class NoDateColumnsError(Exception):
 class TooManyColumnsError(Exception):
     print("Too many columns were found that could be datetime objects")
 
+class InvalidColError(Exception):
+    pass
+
 class dfObj():
     """A dataframe object. 
         name: str (name of the file)
@@ -60,8 +63,6 @@ class dfObj():
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
             new_df = station_merge(df1, df2)
-            for col in new_df:
-                print(new_df[col])
         
         weather_type = ['Trip', 'Trip-BikeStation']
         if self._dtype in weather_type and add_df._dtype == 'Weather':
@@ -75,7 +76,7 @@ class dfObj():
         new_name = self.name + 'MERGE' + add_df.name
         new_dtype = self._dtype + '-' + add_df._dtype 
 
-        # clean up new dataframe (e.g., duplicate columns)
+        # TODO! remove duplicated columns
         for col in new_df.columns: 
             if col.endswith('_y'):
                 new_df.drop(col, axis=1, inplace=True)
@@ -101,7 +102,7 @@ class dfObj():
         if new_df.empty:
             raise IncompatibleDataframes("Dataframes are incompatible")
         
-        new_name = self.name + 'MERGE' + add_df.name
+        new_name = 'OD-merge-on-' + self.name.split('.')[0]
         new_dtype = 'OD' 
         
         new_obj = dfObj(new_name, new_df, new_dtype)
@@ -119,7 +120,7 @@ def find_groupby(df: pd.DataFrame, tester: str) -> str:
         if '_' in tester:
             splitter = '_'
         test_list = [int(item in col.lower()) for item in tester.split(splitter)]
-        splitter = None
+        splitter = ' '
         if '_' in col:
             splitter = '_'
         if np.array(test_list).all() and len(test_list) == len(col.split(splitter)):
@@ -127,7 +128,7 @@ def find_groupby(df: pd.DataFrame, tester: str) -> str:
     if bycol:
         return bycol
     else:
-        print("Invalid column name")
+        raise InvalidColError("Invalid column name")
 
 def get_col_count(df: pd.DataFrame, bycol: str, new_col_name: str = 'count') -> pd.DataFrame:
     """Calls groupby on dataframe and returns a new dataframe with two columns
@@ -148,7 +149,8 @@ def get_col_count(df: pd.DataFrame, bycol: str, new_col_name: str = 'count') -> 
 
 def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
     """Add columns after creating bins.
-    Names should follow format of xxx_xxx"""
+    Names should follow format of xxx_xxx
+    Possible options: 'date', 'month', 'season', 'timeperiod', 'weekday', 'weather'"""
     print("Creating columns...")
     df = df.copy()
     # check if there's a datetime column or if it must be added
@@ -165,7 +167,6 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
         date_col = get_datetime_col(df)  # can return tuple or str
         if type(date_col) == tuple:
             date_col, date_cols = date_col[0], date_col
-        print(date_col)
     if 'date' in names:
         df['date'] = df[date_col].dt.date
     if 'month' in names:
@@ -232,8 +233,8 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.Data
         dest_count_label = 'count_dest'
         orig_count = get_col_count(tr, 'start station id', orig_count_label)
         dest_count = get_col_count(tr, 'end station id', dest_count_label)
-        print('check int or float')
-        print(dest_count)
+        # print('check int or float')
+        # print(dest_count)
         
         st_orig = pd.merge(st_orig, orig_count, on=orig_id_label, how='left')
         st_dest = pd.merge(st_dest.filter(['station_id', dest_id_label]), dest_count, on=dest_id_label, how='left')
@@ -242,21 +243,16 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.Data
         output.fillna({orig_count_label: 0, dest_count_label: 0}, inplace=True)
         output[orig_count_label] = output[orig_count_label].astype(int)
         output[dest_count_label] = output[dest_count_label].astype(int)
-        # keep both axes then do output.fillna(0, inplace=True)
         output.drop([orig_id_label, dest_id_label], inplace=True, axis=1)
         return output
-    # remove station_id columns since not necessary
-    # TODO drop station_id???
-    # output.drop('station_id', axis=1, inplace=True) # both have _x and _y
     
     output = pd.merge(tr, st_orig, on=orig_id_label, how='left')
     output = pd.merge(output, st_dest, on = dest_id_label, how='left')
 
     # output = pd.merge(tr, st_orig, on=name, how='left')
     # output.drop('station_id', axis=1, inplace=True)
-
-    # st_dest[dest_id_label] = st_dest['station_id']
     # st_dest.drop('station_id', axis=1, inplace=True)
+
     return output
 
 def renamer(keys, addition: str, avoider: str) -> dict:
@@ -277,7 +273,7 @@ def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left'
 def get_datetime_col(df: pd.DataFrame) -> tuple|str:
     """Returns name of the column (or columns) that are datetime objects.
     Converts columns to datetime objects if they're not.
-    Consider standardizing column names??"""
+    (eventually consider standardizing column names?)"""
     if 'datetime' in df.columns and df['datetime'].dtype in ['datetime64[ns]', '<M8[ns]']:
         return 'datetime'
     columns = []

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import os
-from dfObj import dfObj, add_col, IncompatibleDataframes
+from dfObj import dfObj, add_col, IncompatibleDataframes, find_groupby, InvalidColError
 
 MAX_LENGTH = 120
 
@@ -32,18 +32,16 @@ class folderProcessor():
     
     # Pure
     def get_ods(self, add_folder: 'folderProcessor') -> list[dfObj]:
-        # TODO! make faster; pass file name to function instead of folderProcessor
+        # TODO!
         # then use same logic as 'test'
         ret = []
         for base_obj in self._dfs: # base_obj is the base merging dataframe
             # only need station data from add_folder
             add_obj = add_folder._dfs[add_folder._types.index('BikeStation')]
-            # type compatibility is handled by dfObj.basic_merge()
+            # merge compatibility is handled by dfObj.basic_merge()
             od_obj = base_obj.od_merge(add_obj)
-            # rename with columns at one point?? 
-                # EDIT THIS once it's clear what the groupby output is
-                # df1.rename({"August":'August origins'}, axis=1, inplace=True)
-                # df2.rename({"August":'August destinations'}, axis=1, inplace=True)
+            # df1.rename({"August":'August origins'}, axis=1, inplace=True)
+            # df2.rename({"August":'August destinations'}, axis=1, inplace=True)
             ret.append(od_obj)
         return ret
     
@@ -51,7 +49,7 @@ class folderProcessor():
         ret = []
         for base_obj in self._dfs: # base_obj is the base merging dataframe
            for add_obj in add_folder._dfs:
-                try: # type compatibility is handled by dfObj.basic_merge()???
+                try: # merge compatibility is handled by dfObj.basic_merge()???
                     new_obj = base_obj.basic_merge(add_obj)
                     ret.append(new_obj)
                 except IncompatibleDataframes:
@@ -92,7 +90,6 @@ class folderProcessor():
             # try ignore index?
             # reset index?
         return output
-    
 # // end class definition
 
 # pure helper
@@ -111,7 +108,7 @@ def make_df(path: str, df: pd.DataFrame, dtype: str = None) -> dfObj:
 # global helper
 def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     """<path> is a path to a csv file
-    <dtype> can be Trip, Weather, BikeStation, TTCStation
+    <dtype> can be Trip, Weather, BikeStation, TTCStation 
     Clean dataframe <self> (remove columns and remove NA rows) and remove BOM
     """
     path = os.path.abspath(path)
@@ -139,16 +136,19 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     for col in row_drop:
         if col in df.columns:
             df.dropna(subset=[col], axis=0, how='any', inplace=True)
-    # self.length = len(self.df)
     print("Cleaned length:", len(df))
 
-    if "Trip_Duration" in df.columns:
-        df["Trip_Duration_(min)"] = round(df["Trip_Duration"]/60, 2)
+    try:
+        duration_label = find_groupby(df, 'Trip_Duration')
+        startid_label = find_groupby(df, 'Start_Station_Id')
+        endid_label = find_groupby(df, 'End_Station_Id')
+        df["Trip_Duration_(min)"] = round(df[duration_label]/60, 2)
         df = df.loc[(df["Trip_Duration_(min)"] <= MAX_LENGTH) 
                     & (df["Trip_Duration_(min)"] >= 2)]
-    if 'Start_Station_Id' in df.columns:
-        df = df.loc[df['Start_Station_Id'] != df['End_Station_Id']]
+        df = df.loc[df[startid_label] != df[endid_label]]
         print("Filtered length:", len(df))
+    except InvalidColError:
+        pass
     df.reset_index(inplace=True, drop=True)
     return df
 

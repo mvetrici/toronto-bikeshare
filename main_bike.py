@@ -10,6 +10,7 @@ add_data = folderProcessor(data_path)
 objs = bike_data.merge_all(add_data)
 for obj in objs:
     print(obj)
+    obj.write()
 # testdf = df_from_file(OD_TEST)
 # makeModel(df=testdf, predict='count_orig', vars = ['capacity', 'count_dest']).make_dot(x='capacity', y='dest count')
 
