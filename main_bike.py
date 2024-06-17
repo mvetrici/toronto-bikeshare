@@ -5,7 +5,7 @@ bike_path = "bikeshare-ridership-2023"
 data_path = "other-datasets-2023"
 bike_data = folderProcessor(bike_path, 'test')
 add_data = folderProcessor(data_path)
-objs = bike_data.merge_all(add_data)
+objs = bike_data.get_ods(add_data)
 for obj in objs:
     print(obj)
     obj.write()
