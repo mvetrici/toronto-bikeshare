@@ -72,7 +72,7 @@ class dfObj():
         if new_df.empty:
             raise IncompatibleDataframes("Dataframes are incompatible")
         
-        new_name = self.name + ' merged with ' + add_df.name
+        new_name = self.name + 'MERGE' + add_df.name
         new_dtype = self._dtype + '-' + add_df._dtype 
 
         # clean up new dataframe (e.g., duplicate columns)
@@ -81,7 +81,6 @@ class dfObj():
                 new_df.drop(col, axis=1, inplace=True)
         
         new_obj = dfObj(new_name, new_df, new_dtype)
-        print(new_obj)
         return new_obj
     
     def od_merge(self, add_df: 'dfObj') -> 'dfObj': #, types: list[str]) -> 'dfObj': 
