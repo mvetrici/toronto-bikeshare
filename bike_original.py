@@ -6,9 +6,6 @@ import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
-import io
-
-
 
 WEATHER_PATH = r"C:\Users\mvetr\OneDrive - University of Toronto\Desktop\Summer research\to-city-cen-weather-2023\weather2023.csv"
 

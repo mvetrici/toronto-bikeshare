@@ -47,7 +47,7 @@ class dfObj():
         return self._df.info()
     
     def write(self):
-        self._df.to_csv(self.name, index=False)
+        self._df.to_csv(self.name + '.csv', index=False)
     
     def basic_merge(self, add_df: 'dfObj') -> 'dfObj': #, types: list[str]) -> 'dfObj': 
         """Creates a new dataframe object with merged dataframes.
@@ -73,7 +73,7 @@ class dfObj():
         if new_df.empty:
             raise IncompatibleDataframes("Dataframes are incompatible")
         
-        new_name = self.name + 'MERGE' + add_df.name
+        new_name = f'merge-{add_df._dtype}-to-{self.name.split('.')[0]}'
         new_dtype = self._dtype + '-' + add_df._dtype 
 
         # TODO! remove duplicated columns
