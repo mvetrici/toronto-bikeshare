@@ -1,9 +1,8 @@
-import numpy as np
 import pandas as pd
 import os
-from dfObj import dfObj, add_col, IncompatibleDataframes, find_groupby, InvalidColError
-
-MAX_LENGTH = 120
+from dfObj import dfObj
+from pd_helpers import df_from_file, IncompatibleDataframes, add_col, \
+    get_folder_paths
 
 class folderProcessor():
     def __init__(self, folder_name: str, test: str = None):
@@ -14,20 +13,22 @@ class folderProcessor():
         self.name = folder_name
         self._types = []
         self._dfs = []
+        folder_paths = get_folder_paths(folder_name)
 
-        folder_path = os.path.abspath(folder_name)
-        folder_paths = [file for file in os.listdir(folder_path)]
-        
         if test == 'test':
-            folder_paths = [file for file in os.listdir(folder_path) if file.endswith('08.csv')] # or file.endswith('09.csv')]
-
-        for file in folder_paths:
-            print(f"File '{file}' is being processed.")
-            data_path = os.path.join(folder_path, file)
-            df = df_from_file(data_path) # clean the data into a dataframe
-            df_obj = make_df(data_path, df) # pass dataframe to make a dfObj
+            data_path = folder_paths.get('Bike share ridership 2023-01.csv')
+            df = df_from_file(data_path)
+            df_obj = make_df(data_path, df)
             self._dfs.append(df_obj)
             self._types.append(df_obj.get_type())
+        
+        else:
+            for file in folder_paths.keys():
+                print(f"File '{file}' is being processed.")
+                df = df_from_file(folder_paths[file]) # clean the data into a dataframe
+                df_obj = make_df(folder_paths[file], df) # pass dataframe to make a dfObj
+                self._dfs.append(df_obj)
+                self._types.append(df_obj.get_type())
         return 
     
     # Pure
@@ -45,16 +46,28 @@ class folderProcessor():
             ret.append(od_obj)
         return ret
     
-    def merge_all(self, add_folder: 'folderProcessor') -> list[dfObj]:
+    def multi_merge(self, add_folder: 'folderProcessor') -> list[dfObj]:
+        """Returns a list of dataframes, where each one is a different pairing"""
         ret = []
         for base_obj in self._dfs: # base_obj is the base merging dataframe
            for add_obj in add_folder._dfs:
                 try: # merge compatibility is handled by dfObj.basic_merge()???
-                    new_obj = base_obj.basic_merge(add_obj)
-                    ret.append(new_obj)
+                    new_df = base_obj.basic_merge(add_obj)
+                    ret.append(new_df)
                 except IncompatibleDataframes:
                     pass
         return ret
+    
+    def combine_merge(self, add_folder: 'folderProcessor') -> dfObj:
+        """Returns a dataframe merged with all possible dataframes"""
+        for base_obj in self._dfs: # base_obj is the base merging dataframe
+           base = base_obj
+           for add_obj in add_folder._dfs:
+                try: # merge compatibility is handled by dfObj.basic_merge()???
+                    base = base.basic_merge(add_obj)
+                except IncompatibleDataframes:
+                    pass
+        return base
     
     # Info
     def __str__(self) -> str:
@@ -104,54 +117,3 @@ def make_df(path: str, df: pd.DataFrame, dtype: str = None) -> dfObj:
     if 'stop_id' in df.columns:
         dtype = "TTCStation"
     return dfObj(name, df, dtype)
-    
-# global helper
-def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
-    """<path> is a path to a csv file
-    <dtype> can be Trip, Weather, BikeStation, TTCStation 
-    Clean dataframe <self> (remove columns and remove NA rows) and remove BOM
-    """
-    path = os.path.abspath(path)
-    df = pd.read_csv(path, encoding=encoding)
-    print("DataFrame created")
-    print("Original length:", len(df))
-        
-    # reformat column titles
-    df.columns = df.columns.str.strip()
-    df.columns = df.columns.str.replace('"', '')
-    df.columns = df.columns.str.replace('  ', ' ')
-    df.columns = df.columns.str.replace(' ', '_')
-
-    # remove BOM and columns with mostly NAs
-    col_drop = ['rental_uris', "obcn", "short_name", 'nearby_distance', '_ride_code_support']
-    for col in df.columns:
-        col1 = col.encode('cp1252').decode('utf-8-sig', 'ignore')
-        df.rename(columns={col: col1}, inplace=True)
-        if col1 in col_drop:
-            if int(df[col1].isna().sum()) > 0.5*len(df) or col1 in col_drop:
-                df.drop(col1, axis=1, inplace=True)
-    
-    # remove rows with NAs in columns in row_drop
-    row_drop = ["End_Station_Id", 'Min_Temp_(°C)', 'Mean_Temp_(°C)', 'Max_Temp_(°C)']
-    for col in row_drop:
-        if col in df.columns:
-            df.dropna(subset=[col], axis=0, how='any', inplace=True)
-    print("Cleaned length:", len(df))
-
-    try:
-        duration_label = find_groupby(df, 'Trip_Duration')
-        startid_label = find_groupby(df, 'Start_Station_Id')
-        endid_label = find_groupby(df, 'End_Station_Id')
-        df["Trip_Duration_(min)"] = round(df[duration_label]/60, 2)
-        df = df.loc[(df["Trip_Duration_(min)"] <= MAX_LENGTH) 
-                    & (df["Trip_Duration_(min)"] >= 2)]
-        df = df.loc[df[startid_label] != df[endid_label]]
-        print("Filtered length:", len(df))
-    except InvalidColError:
-        pass
-    df.reset_index(inplace=True, drop=True)
-    return df
-
-# tester = np.arange(len(df))
-# if (df['index'] == tester).all():
-#     df.drop('index', axis=1, inplace=True)
