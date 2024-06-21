@@ -4,7 +4,10 @@ import os
 import re
 
 class IncompatibleDataframes(Exception):
-    pass
+    """Raises an exception when dataframes can't be merged"""
+    def __init__(self):
+        self.message = "Exception: Incompatible data types"
+        super().__init__(self.message)
 
 class NoDateColumnsError(Exception):
     pass
@@ -74,7 +77,7 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
 
     try:
         precip_label = get_label(df, 'total precip mm')
-        df.drop('Longitude_x', axis=1, inplace=True)
+        df.drop(['Longitude_x', 'Latitude_y'], axis=1, inplace=True)
         df["precip"] = (df[precip_label] > 0)
         df['precip'] = df['precip'].astype(int)
     except InvalidColError:
@@ -85,9 +88,9 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
         startid_label = get_label(df, 'Start_Station_Id')
         endid_label = get_label(df, 'End_Station_Id')
         df[endid_label] = df[endid_label].astype(int)
-        df["Trip_Duration_(min)"] = round(df[duration_label]/60, 2)
-        df = df.loc[(df["Trip_Duration_(min)"] <= MAX_LENGTH) 
-                    & (df["Trip_Duration_(min)"] >= 2)]
+        df["Trip_Duration_min"] = round(df[duration_label]/60, 2)
+        df = df.loc[(df["Trip_Duration_min"] <= MAX_LENGTH) 
+                    & (df["Trip_Duration_min"] >= 2)]
         df = df.loc[df[startid_label] != df[endid_label]]
         print("Filtered length:", len(df))
     except InvalidColError:
@@ -118,48 +121,60 @@ def get_label(df: pd.DataFrame, tester: str) -> str:
     if bycol:
         return bycol
     else:
-        raise InvalidColError("Invalid column name")
+        raise InvalidColError(f"<{tester}> could not be found in the data")
 
-def get_col_count(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count', new: bool = False) -> pd.DataFrame:
+def get_col_count(df: pd.DataFrame, bycol: list[str], 
+                  new_col_name: str = 'count', 
+                  new: bool = False, 
+                  keep: list = None) -> pd.DataFrame:
     """Calls groupby on dataframe and returns a new dataframe with two columns
     first column is the grouper column, second is the count. 
-    <bycol> is a column or a list of labels
-
+    <bycol> is a list of labels
     """
-
+    for i in range(len(keep)):
+        keep[i] = get_label(df, keep[i])
     for i in range(len(bycol)):
         bycol[i] = get_label(df, bycol[i])
     for col in df.columns:
         if df[col].nunique() == len(df):
-            keep = col
-    if not keep:
+            rename = col
+    if not rename:
         raise NotSureWhatToCountError("No column found")
     
     if new:
         df = df.groupby(bycol, observed=False).count().reset_index()
         # sort=False, dropna=False
-        df.rename({keep: new_col_name}, axis=1, inplace=True)
-        return df.filter(bycol + [new_col_name])
-        
+        df.rename({rename: new_col_name}, axis=1, inplace=True)
+        df = df.filter(bycol + [new_col_name])
+        # print("DF OUT")
+        # print(df_out)
+        # print("DF OUT after merging")
+        # df_out = merge_on(df_out, df.filter([bycol[0]] + keep), oncol=bycol[0], how='left').drop_duplicates().reset_index(drop=True)
+        # return df_out
     else: 
-        df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)[keep].transform('count')
-        return df
+        df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)[rename].transform('count')
+    if keep:
+        keep_list = [item for item in keep if item in df.columns]
+        if keep_list != keep:
+            print(f"Could not keep all columns in {keep} because they were not valid columns")
+        df = df.filter(bycol + keep + [new_col_name])
+    return df
 
 def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
     """Add columns after creating bins.
     Names should follow format of xxx_xxx
-    Possible options: 'date', 'month', 'season', 'timeperiod', 'weekday', 'weather'"""
+    Possible options: 'date', 'month', 'season', 'timeperiod', 'weekday', 'weather', 'cost'"""
     print("Creating columns...")
     df = df.copy()
     # check if there's a datetime column or if it must be added
     datetime_cols = ['date', 'month', 'season', 'timeperiod', 'weekday']
     check_date = False
-    possible = datetime_cols + ['weather']
+    possible = datetime_cols + ['weather', 'cost']
     for name in names:
         if name in datetime_cols:
             check_date = True
         if name not in possible:
-            print(f"Error in add_col: Column type <{name}> not valid")
+            raise InvalidColError(f"Error in add_col: Column type <{name}> not valid")
     if check_date:
         # look for datetime column and mutates df (the copy of the original)
         date_cols = get_datetime_col(df)
@@ -201,7 +216,18 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
             raise InvalidColError(f"<{col_name}> is not a column label.")
         df["temp_range"] = pd.cut(df[col_name], 
                 bins=bins, include_lowest=True, labels=labels)
+    
+    if 'cost' in names:
+        user_col, dur_col = get_label(df, 'user type'), get_label(df, 'trip duration')
+        df['cost'] = df.apply(lambda x : calculate_cost(x, user_col, dur_col), axis=1)
+    # return row['Max Temp (°C)'] 
     return df
+
+def calculate_cost(row, user_col: str, dur_col: str):
+    user_type = row[user_col]
+    if user_type == 'Casual Member':
+        return 1 + 0.12*row[dur_col]/60
+    return 0.3 # user is Annual Member
 
 # pure, global
 def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.DataFrame:
@@ -258,7 +284,17 @@ def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left'
         df1 = add_col(df1, [oncol])
     if oncol not in df2.columns:
         df2 = add_col(df2, [oncol])
-    return pd.merge(df1, df2, on=oncol, how=how)
+    if how == 'left_on':
+        df = pd.merge(df1, df2, left_on=oncol, right_on=oncol)
+    else:
+        df = pd.merge(df1, df2, on=oncol, how=how)
+    print("DF1 info")
+    df1.info()
+    print("DF2 info")
+    df2.info()
+    print("MERGED info")
+    df.info()
+    return df
 
 # HELPER and MUTATES
 def get_datetime_col(df: pd.DataFrame) -> list[str]:
