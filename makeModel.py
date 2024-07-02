@@ -11,6 +11,7 @@ JANTRIPS = r"Bike share ridership 2023-01.csv"
 DATA = 'other-datasets-2023'
 COLOURS = ['lightsteelblue', 'bisque', 'turquoise', 'khaki', 'salmon', 'peachpuff', 'pink', 'lightcoral', 'thistle']
 
+# in progress
 def visualize_cost():
     trips_folder = folderProcessor(TRIPS, 'test')
     other_folder = folderProcessor(DATA)
@@ -29,6 +30,7 @@ def visualize_cost():
     #print('done')
     # pd.plot()
 
+# in progress
 def dura_dist(df: pd.DataFrame, groupby: str = None):
     """Plots distribution of trip durations between 4 most common station pairs.
     Does not modify dataframes."""    
@@ -63,6 +65,7 @@ def dura_dist(df: pd.DataFrame, groupby: str = None):
     plt.suptitle("Durations (mins)") # plt.tight_layout()
     plt.show()
 
+# in progress
 def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = None):
     """Plots ONE layered distribution of trip durations between <num_pairs> most common station pairs.
     Does not modify dataframes.
@@ -119,7 +122,6 @@ if __name__ == '__main__':
 
     # for df in dfs:
     #     dura_dist(df.get_df())
-
 
 
 # ///* Start class definition

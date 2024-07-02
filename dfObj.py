@@ -3,7 +3,6 @@ from pd_helpers import station_merge, merge_on, IncompatibleDataframes
 
 MAX_LENGTH = 120
 
-
 class dfObj():
     """A dataframe object. 
         name: str (name of the file)

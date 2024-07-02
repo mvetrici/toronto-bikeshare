@@ -25,7 +25,7 @@ class NoIndexTypeColumn(Exception):
         self.message = "No index-type column that can be converted to 'count' column"
         super().__init__(self.message)
 
-MAX_LENGTH = 120
+MAX_LENGTH = 120 # time in minutes of longest possible trip
 
 # helper
 def get_folder_paths(folder_name: str) -> dict:

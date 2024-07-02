@@ -4,7 +4,7 @@ from dfObj import dfObj
 from pd_helpers import df_from_file, IncompatibleDataframes, add_col, \
     get_folder_paths
 
-TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or any combination joined by -
+TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or combination joined by -
 
 class folderProcessor():
     def __init__(self, folder_name: str = 'Empty folder', test: str = None):
