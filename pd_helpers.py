@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+from typing import Iterable
 
 class IncompatibleDataframes(Exception):
     """Raises an exception when dataframes can't be merged"""
@@ -10,26 +11,23 @@ class IncompatibleDataframes(Exception):
         super().__init__(self.message)
 
 class NoDateColumnsError(Exception):
-    pass
+    def __init__(self):
+        self.message = "No date columns were found"
+        super().__init__(self.message)
 
 class InvalidColError(Exception):
-    pass
+    def __init__(self, colname: str):
+        self.message = f"<{colname}> could not be found in the data"
+        super().__init__(self.message)
 
-class NotSureWhatToCountError(Exception):
-    pass
+class NoIndexTypeColumn(Exception):
+    def __init__(self):
+        self.message = "No index-type column that can be converted to 'count' column"
+        super().__init__(self.message)
 
 MAX_LENGTH = 120
 
-# pandas commands
-# tester = np.arange(len(df))
-# if (df['index'] == tester).all():
-#     df.drop('index', axis=1, inplace=True)
-
-# if 'trip_count' in names and 'trip_count' not in df.columns:
-#     tripid_label = get_label(df, 'trip id')
-#     df['trip_count'] = df.groupby([tripid_label])[tripid_label].transform('count')
-
-# global helper
+# helper
 def get_folder_paths(folder_name: str) -> dict:
     folder_path = os.path.abspath(folder_name)
     folder_dict = {}
@@ -38,16 +36,16 @@ def get_folder_paths(folder_name: str) -> dict:
         folder_dict[file] = data_path
     return folder_dict
 
-# global helper
 def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     """<path> is a path to a csv file
     <dtype> can be Trip, Weather, BikeStation, TTCStation 
-    Clean dataframe <self> (remove columns and remove NA rows) and remove BOM
+    Cleans dataframe (remove columns and remove NA rows from certain columsn).
+    Removes BOM.
     """
     path = os.path.abspath(path)
     df = pd.read_csv(path, encoding=encoding)
     print("DataFrame created")
-    print("Original length:", len(df))
+    filtering, orig_length = '', len(df)
         
     # reformat column titles
     df.columns = df.columns.str.strip()
@@ -63,7 +61,7 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
         df.rename(columns={col: col1}, inplace=True)
         
         # remove unhelpful columns or columns with mostly NAs 
-        remove = col1 in col_drop or 'flag' in col1.lower() or int(df[col1].isna().sum()) > 0.5*len(df) or 'days' in col.lower() or 'gust' in col.lower()
+        remove = col1 in col_drop or 'flag' in col1.lower() or int(df[col1].isna().sum()) > 0.5*len(df) or 'days' in col1.lower() or 'gust' in col1.lower()
         if remove:
             df.drop(col1, axis=1, inplace=True)
 
@@ -73,9 +71,9 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
         if dropna: 
             df.dropna(subset=[col1], axis=0, how='any', inplace=True)
 
-    print("Cleaned length:", len(df))
+    shortest = len(df) # used for print statement
 
-    try:
+    try: # reformat weather data specifically
         precip_label = get_label(df, 'total precip mm')
         df.drop(['Longitude_x', 'Latitude_y'], axis=1, inplace=True)
         df["precip"] = (df[precip_label] > 0)
@@ -83,26 +81,32 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     except InvalidColError:
         pass
 
-    try:
-        duration_label = get_label(df, 'Trip_Duration')
-        startid_label = get_label(df, 'Start_Station_Id')
-        endid_label = get_label(df, 'End_Station_Id')
+    try: # reformat trip data and filter out outlier trips
+        duration_label, startid_label, endid_label = get_label_list(df, ['Trip_Duration', 'Start_Station_Id', 'End_Station_Id'])
         df[endid_label] = df[endid_label].astype(int)
         df["Trip_Duration_min"] = round(df[duration_label]/60, 2)
         df = df.loc[(df["Trip_Duration_min"] <= MAX_LENGTH) 
                     & (df["Trip_Duration_min"] >= 2)]
         df = df.loc[df[startid_label] != df[endid_label]]
-        print("Filtered length:", len(df))
+        filtering, shortest = "(with filtering)", len(df)
     except InvalidColError:
         pass
     
+    print(orig_length - shortest, "observations were removed", filtering)
     df.reset_index(inplace=True, drop=True)
+    
     return df
 
-
 # Pure (returns new dataframe object)
+def get_label_list(df: pd.DataFrame, tester: list[str]) -> list[str]:
+    ret = tester.copy()
+    for i in range(len(tester)):
+        ret[i] = get_label(df, tester[i])
+    return ret
+
+# Pure helper
 def get_label(df: pd.DataFrame, tester: str) -> str:
-    """Finds column in a dataset"""
+    """Finds column in a dataset. Does not add columns."""
     bycol = None
     if tester in df.columns: # option 1
         bycol = tester
@@ -121,50 +125,50 @@ def get_label(df: pd.DataFrame, tester: str) -> str:
     if bycol:
         return bycol
     else:
-        raise InvalidColError(f"<{tester}> could not be found in the data")
+        raise InvalidColError(tester)
 
+# Pure (will be improved)
 def get_col_count(df: pd.DataFrame, bycol: list[str], 
                   new_col_name: str = 'count', 
                   new: bool = False, 
                   keep: list = None) -> pd.DataFrame:
-    """Calls groupby on dataframe and returns a new dataframe with two columns
+    """Calls groupby on dataframe and returns a new dataframe with two columns:
     first column is the grouper column, second is the count. 
-    <bycol> is a list of labels
+    <bycol> is a list of one or more labels
     """
-    for i in range(len(keep)):
-        keep[i] = get_label(df, keep[i])
-    for i in range(len(bycol)):
-        bycol[i] = get_label(df, bycol[i])
-    for col in df.columns:
-        if df[col].nunique() == len(df):
-            rename = col
-    if not rename:
-        raise NotSureWhatToCountError("No column found")
+    bycol= get_label_list(df, bycol)
+    rename = False
     
     if new:
+        for col in df.columns:
+            if df[col].nunique() == len(df) or col not in bycol:
+                rename = col # find column to mutate
+        if not rename:
+            raise NoIndexTypeColumn()
+        
         df = df.groupby(bycol, observed=False).count().reset_index()
-        # sort=False, dropna=False
+
+        # optionally add sort=False, dropna=False
         df.rename({rename: new_col_name}, axis=1, inplace=True)
+
         df = df.filter(bycol + [new_col_name])
-        # print("DF OUT")
-        # print(df_out)
-        # print("DF OUT after merging")
         # df_out = merge_on(df_out, df.filter([bycol[0]] + keep), oncol=bycol[0], how='left').drop_duplicates().reset_index(drop=True)
-        # return df_out
     else: 
         df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)[rename].transform('count')
     if keep:
+        keep = get_label_list(df, keep)
         keep_list = [item for item in keep if item in df.columns]
         if keep_list != keep:
             print(f"Could not keep all columns in {keep} because they were not valid columns")
-        df = df.filter(bycol + keep + [new_col_name])
+        df = df.filter(bycol + keep_list + [new_col_name])
     return df
 
+# pure
 def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
-    """Add columns after creating bins.
-    Names should follow format of xxx_xxx
-    Possible options: 'date', 'month', 'season', 'timeperiod', 'weekday', 'weather', 'cost'"""
-    print("Creating columns...")
+    """Add category columns after creating bins.
+    Possible <names> options: 'date', 'month', 'season', 
+    'timeperiod', 'weekday', 'weather', 'cost'"""
+    print("Creating columns:", names)
     df = df.copy()
     # check if there's a datetime column or if it must be added
     datetime_cols = ['date', 'month', 'season', 'timeperiod', 'weekday']
@@ -174,10 +178,11 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
         if name in datetime_cols:
             check_date = True
         if name not in possible:
-            raise InvalidColError(f"Error in add_col: Column type <{name}> not valid")
+            raise InvalidColError(name)
     if check_date:
         # look for datetime column and mutates df (the copy of the original)
         date_cols = get_datetime_col(df)
+        print("Datetime column found")
         if len(date_cols) > 1:
             start_label = get_label(df, 'start time')
         date_col = date_cols[0]
@@ -213,7 +218,7 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
             if 'temp' in col.lower() and 'mean' in col.lower():
                 col_name = col
         if col_name is None:
-            raise InvalidColError(f"<{col_name}> is not a column label.")
+            raise InvalidColError(col_name)
         df["temp_range"] = pd.cut(df[col_name], 
                 bins=bins, include_lowest=True, labels=labels)
     
@@ -223,16 +228,20 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
     # return row['Max Temp (°C)'] 
     return df
 
+# helper 
 def calculate_cost(row, user_col: str, dur_col: str):
     user_type = row[user_col]
     if user_type == 'Casual Member':
-        return 1 + 0.12*row[dur_col]/60
+        return 1 + 0.12*row[dur_col]/60 
     return 0.3 # user is Annual Member
 
-# pure, global
-def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.DataFrame:
+# pure
+def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: bool = False) -> pd.DataFrame:
     """Merges two dataframes based on the station id column.
-    The first column in df2 (the stations data) must be station_id"""
+    <tr> represents trip data, <st> represents station data
+    If <od> passed, returns dataframe with each station's n. of origins and destinations.
+    Otherwise, doesn't modify the <tr> dataframe and only appends columns  
+    with station information for the origin and destination stations"""
     if not od:
         st_orig = st.rename(renamer(st.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
         st_dest = st.rename(renamer(st.columns, '_dest', 'station_id'), axis=1)
@@ -272,14 +281,20 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: str = None) -> pd.Data
     return output
 
 # helper
-def renamer(keys, addition: str, avoider: str) -> dict:
+def renamer(keys: Iterable, addition: str, avoider: str) -> dict:
+    """Renames labels in <keys> (except <avoider>) by combining the 
+    label with <addition>. Returns a dictionary."""
     namer = {}
     for key in keys:
         if key != avoider: 
             namer[key] = key + addition
     return namer
 
+# pure
 def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left') -> pd.DataFrame:
+    """Returns a new dataframe that represents <df1> and <df2> merged on 
+    the column <oncol> using the method <how>."""
+    
     if oncol not in df1.columns:
         df1 = add_col(df1, [oncol])
     if oncol not in df2.columns:
@@ -288,19 +303,19 @@ def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left'
         df = pd.merge(df1, df2, left_on=oncol, right_on=oncol)
     else:
         df = pd.merge(df1, df2, on=oncol, how=how)
-    print("DF1 info")
-    df1.info()
-    print("DF2 info")
-    df2.info()
-    print("MERGED info")
-    df.info()
+    # print("DF1 info")
+    # df1.info()
+    # print("DF2 info")
+    # df2.info()
+    # print("MERGED info")
+    # df.info()
     return df
 
-# HELPER and MUTATES
+# HELPER (MUTATES)
 def get_datetime_col(df: pd.DataFrame) -> list[str]:
-    """Returns name of the columns that are datetime objects.
+    """Returns list of the column labels that are datetime objects.
     Converts columns to datetime objects if they're not.
-    (eventually consider standardizing column names?)"""
+    (eventually consider standardizing column names)"""
     datetypes = ['datetime64[ns]', '<M8[ns]']
     date_cols = []
     for col in df.columns:
@@ -314,5 +329,18 @@ def get_datetime_col(df: pd.DataFrame) -> list[str]:
                 except ValueError:
                     pass
     if len(date_cols) == 0:
-        raise NoDateColumnsError("No date columns were found")
+        raise NoDateColumnsError()
     return date_cols
+
+
+# pandas commands
+# tester = np.arange(len(df))
+# if (df['index'] == tester).all():
+#     df.drop('index', axis=1, inplace=True)
+
+# if 'trip_count' in names and 'trip_count' not in df.columns:
+#     tripid_label = get_label(df, 'trip id')
+#     df['trip_count'] = df.groupby([tripid_label])[tripid_label].transform('count')
+
+# df['count'] = df.groupby('group').cumcount()+1
+# df['count'] = df.groupby('group')['group'].transform('count')

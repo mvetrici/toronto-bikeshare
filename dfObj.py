@@ -42,8 +42,8 @@ class dfObj():
         self._df.to_csv(self.name + '.csv', index=False)
     
     def basic_merge(self, add_df: 'dfObj') -> 'dfObj': #, types: list[str]) -> 'dfObj': 
-        """Creates a new dataframe object with merged dataframes.
-        Does not mutate dataframes.
+        """Creates a new dfObj object with merged dataframes.
+        Does not mutate existing dataframes.
         Function should be applied on "left" dataframe (i.e., self
         refers to a dataframe with all the valid keys)
         """
