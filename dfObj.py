@@ -10,7 +10,9 @@ class dfObj():
         dtype: str (Trip, Weather, BikeStation, TTCStation, Trip-Weather, etc.)
         length: int (length of the dataframe)
         """
-  
+    bike_type = ['Trip', 'Trip-Weather']
+    weather_type = ['Trip', 'Trip-BikeStation']
+
     def __init__(self, name, df: pd.DataFrame, dtype: str = 'DataFrame'):
         self.name = name
         self._df = df
@@ -48,21 +50,20 @@ class dfObj():
         df1 = self._df.copy()
         df2 = add_df._df.copy()
         new_df = pd.DataFrame()
-        bike_type = ['Trip', 'Trip-Weather']
-        if self._dtype in bike_type and add_df._dtype == 'BikeStation':
+
+        if self._dtype in dfObj.bike_type and add_df._dtype == 'BikeStation':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
             new_df = station_merge(df1, df2)
             # new_df = add_col(new_df, ['trip_count'])
         
-        weather_type = ['Trip', 'Trip-BikeStation']
-        if self._dtype in weather_type and add_df._dtype == 'Weather':
+        if self._dtype in dfObj.weather_type and add_df._dtype == 'Weather':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
             new_df = merge_on(df1, df2, oncol='date')
         
         if new_df.empty:
-            raise IncompatibleDataframes("Dataframes are incompatible")
+            raise IncompatibleDataframes()
         
         new_name = f'merge-{add_df._dtype}-{self.name.split('.')[0]}'
         new_dtype = self._dtype + '-' + add_df._dtype 

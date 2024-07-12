@@ -32,8 +32,9 @@ def get_folder_paths(folder_name: str) -> dict:
     folder_path = os.path.abspath(folder_name)
     folder_dict = {}
     for file in os.listdir(folder_path):
-        data_path = os.path.join(folder_path, file)
-        folder_dict[file] = data_path
+        if file.endswith(".csv"):
+            data_path = os.path.join(folder_path, file)
+            folder_dict[file] = data_path
     return folder_dict
 
 def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
@@ -98,34 +99,31 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     return df
 
 # Pure (returns new dataframe object)
-def get_label_list(df: pd.DataFrame, tester: list[str]) -> list[str]:
-    ret = tester.copy()
-    for i in range(len(tester)):
-        ret[i] = get_label(df, tester[i])
-    return ret
+def get_label_list(df: pd.DataFrame, column_names: list[str]) -> list[str]:
+    new_labels = column_names.copy()
+    for i in range(len(column_names)):
+        new_labels[i] = get_label(df, column_names[i])
+    return new_labels
 
 # Pure helper
-def get_label(df: pd.DataFrame, tester: str) -> str:
+def get_label(df: pd.DataFrame, label: str) -> str:
     """Finds column in a dataset. Does not add columns."""
+    # TODO use regex
     bycol = None
-    if tester in df.columns: # option 1
-        bycol = tester
+    if label in df.columns: # option 1
+        return label
     
     for col in df.columns: # check option 2 or 3 to look for column
-        splitter = ' '
-        if '_' in tester:
-            splitter = '_'
-        test_list = [int(item in col.lower()) for item in tester.split(splitter)]
+        splitter = '_' if '_' in label else ' '
+        test_list = [int(item in col.lower()) for item in label.split(splitter)]
         
-        splitter = ' '
-        if '_' in col:
-            splitter = '_'
+        splitter = '_' if '_' in col else ' '
         if np.array(test_list).all() and len(test_list) == len(col.split(splitter)):
             bycol = col
     if bycol:
         return bycol
     else:
-        raise InvalidColError(tester)
+        raise InvalidColError(label)
 
 # Pure (will be improved)
 def get_col_count(df: pd.DataFrame, bycol: list[str], 
@@ -138,40 +136,35 @@ def get_col_count(df: pd.DataFrame, bycol: list[str],
     """
     bycol= get_label_list(df, bycol)
     rename = False
-    
-    if new:
-        for col in df.columns:
-            if df[col].nunique() == len(df) or col not in bycol:
-                rename = col # find column to mutate
-        if not rename:
-            raise NoIndexTypeColumn()
-        
+    df = df.reset_index() # add 'index' column that can be used for count
+    if new: # create new dataframe
         df = df.groupby(bycol, observed=False).count().reset_index()
 
         # optionally add sort=False, dropna=False
-        df.rename({rename: new_col_name}, axis=1, inplace=True)
-
-        df = df.filter(bycol + [new_col_name])
+        df.rename({'index': new_col_name}, axis=1, inplace=True)
+        return df
         # df_out = merge_on(df_out, df.filter([bycol[0]] + keep), oncol=bycol[0], how='left').drop_duplicates().reset_index(drop=True)
-    else: 
-        df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)[rename].transform('count')
-    if keep:
+    
+    # ELSE: add column to existing dataframe
+    df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)['index'].transform('count')
+    if keep: # return subset of columns
         keep = get_label_list(df, keep)
         keep_list = [item for item in keep if item in df.columns]
         if keep_list != keep:
             print(f"Could not keep all columns in {keep} because they were not valid columns")
-        df = df.filter(bycol + keep_list + [new_col_name])
+        return df.filter(bycol + keep_list + [new_col_name])
     return df
 
 # pure
 def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
-    """Add category columns after creating bins.
+    # TODO! split into multiple columns
+    """Add categorical columns after creating bins.
     Possible <names> options: 'date', 'month', 'season', 
-    'timeperiod', 'weekday', 'weather', 'cost'"""
+    'timeperiod', 'weekday', 'weather', 'cost', 'datetime'"""
     print("Creating columns:", names)
     df = df.copy()
     # check if there's a datetime column or if it must be added
-    datetime_cols = ['date', 'month', 'season', 'timeperiod', 'weekday']
+    datetime_cols = ['datetime', 'date', 'month', 'season', 'timeperiod', 'weekday']
     check_date = False
     possible = datetime_cols + ['weather', 'cost']
     for name in names:
@@ -225,7 +218,7 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
     if 'cost' in names:
         user_col, dur_col = get_label(df, 'user type'), get_label(df, 'trip duration')
         df['cost'] = df.apply(lambda x : calculate_cost(x, user_col, dur_col), axis=1)
-    # return row['Max Temp (°C)'] 
+
     return df
 
 # helper 
@@ -344,3 +337,12 @@ def get_datetime_col(df: pd.DataFrame) -> list[str]:
 
 # df['count'] = df.groupby('group').cumcount()+1
 # df['count'] = df.groupby('group')['group'].transform('count')
+
+
+
+# dead code from get_col_count()
+        # for col in df.columns:
+        #     if df[col].nunique() == len(df) or col not in bycol:
+        #         rename = col # find column to mutate
+        # if not rename:
+        #     raise NoIndexTypeColumn()

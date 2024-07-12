@@ -1,4 +1,4 @@
-import unittest
+import unittest, os
 from folderProcessor import folderProcessor
 import pandas as pd
 from pd_helpers import get_col_count, get_folder_paths, df_from_file, \
@@ -26,13 +26,16 @@ class TestFolder(unittest.TestCase):
 
 class AddCol(unittest.TestCase):
     
-    def add_col(self):
+    def test_add_col(self):
         trips_folder = folderProcessor(TRIPS, 'test')
         other_folder = folderProcessor(DATA)
-        df = trips_folder.combine_merge(other_folder).get_df()
+        df = trips_folder.combine_merge(other_folder)[0].get_df()
         df = add_col(df, ['weather', 'cost'])
         df.info()
         print(df)
+        labels = ["Trip_Id", "Start_Station_Id", "Start_Time", "End_Station_Id", "End_Time", "User_Type", "Trip_Duration_min", "lat_orig", "lon_orig", "capacity_orig", "lat_dest",	"lon_dest", "capacity_dest", "Month", "Max_Temp_C", "precip", "temp_range", "cost"]
+
+        df.filter(labels).to_csv(os.path.join(os.getcwd(), "jul3_clustertest.csv"), index=False)
     
     # def test_visualize_cost(self):
     #     trips_folder = folderProcessor(TRIPS, 'test')

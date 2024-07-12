@@ -25,7 +25,7 @@ class folderProcessor():
             if test != 'test':
                 data_path = folder_paths.get(f'Bike share ridership 2023-{test}.csv')
             else: 
-                data_path = folder_paths.get(f'Bike share ridership 2023-01.csv')
+                data_path = folder_paths.get(f'Bike share ridership 2023-08.csv')
             df = df_from_file(data_path)
             df_obj = make_df(data_path, df)
             self._dfs.append(df_obj)
@@ -73,7 +73,7 @@ class folderProcessor():
     #                 pass
     #     return ret
     
-    def combine_merge(self, add_folder: 'folderProcessor') -> dfObj:
+    def combine_merge(self, add_folder: 'folderProcessor', station_only: bool = False) -> list[dfObj]:
         """Returns a list of the dataframes in <self> each 
         merged with all possible dataframes in <add_folder>."""
         ret = []
@@ -81,7 +81,10 @@ class folderProcessor():
            base = base_obj
            for add_obj in add_folder._dfs:
                 try: # merge compatibility is handled by dfObj.basic_merge()???
-                    base = base.basic_merge(add_obj)
+                    if not station_only:
+                        base = base.basic_merge(add_obj)
+                    if station_only and add_obj.get_type() == 'BikeStation':
+                        base = base.basic_merge(add_obj)
                 except IncompatibleDataframes:
                     pass
         ret.append(base)
