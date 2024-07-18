@@ -1,13 +1,13 @@
 import pandas as pd
 import os
 from dfObj import dfObj
-from pd_helpers import df_from_file, IncompatibleDataframes, add_col, \
-    get_folder_paths
+from pd_helpers import df_from_file, IncompatibleDataframes, get_folder_paths
 
-TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or any combination joined by -
+# user-defined types of datasets
+TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or combination joined by -
 
 class folderProcessor():
-    def __init__(self, folder_name: str = 'Empty folder', test: str = None):
+    def __init__(self, folder_name: str = 'Empty folder', test: str = ''):
         """Converts files in folder <folder_name> to pandas dataframes. 
         <test> can be 'test' (for Jan) or the month of interest (format 'MM').
         self.name: folder name (str)
@@ -25,7 +25,7 @@ class folderProcessor():
             if test != 'test':
                 data_path = folder_paths.get(f'Bike share ridership 2023-{test}.csv')
             else: 
-                data_path = folder_paths.get(f'Bike share ridership 2023-01.csv')
+                data_path = folder_paths.get(f'Bike share ridership 2023-08.csv')
             df = df_from_file(data_path)
             df_obj = make_df(data_path, df)
             self._dfs.append(df_obj)
@@ -73,7 +73,7 @@ class folderProcessor():
     #                 pass
     #     return ret
     
-    def combine_merge(self, add_folder: 'folderProcessor') -> dfObj:
+    def combine_merge(self, add_folder: 'folderProcessor', station_only: bool = False) -> list[dfObj]:
         """Returns a list of the dataframes in <self> each 
         merged with all possible dataframes in <add_folder>."""
         ret = []
@@ -81,7 +81,10 @@ class folderProcessor():
            base = base_obj
            for add_obj in add_folder._dfs:
                 try: # merge compatibility is handled by dfObj.basic_merge()???
-                    base = base.basic_merge(add_obj)
+                    if not station_only:
+                        base = base.basic_merge(add_obj)
+                    if station_only and add_obj.get_type() == 'BikeStation':
+                        base = base.basic_merge(add_obj)
                 except IncompatibleDataframes:
                     pass
         ret.append(base)
@@ -120,13 +123,6 @@ class folderProcessor():
     
     def get_dfs(self) -> list[dfObj]:
         return self._dfs.copy()
-
-    # Mutate
-    def add_col(self, names: list[str]):
-        for df_obj in self._dfs:
-            new_df = add_col(df_obj, names)
-            df_obj.set_df(new_df)
-        return 
     
     # Mutate
     def concat_folder(self) -> pd.DataFrame:
