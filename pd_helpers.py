@@ -26,6 +26,7 @@ class NoIndexTypeColumn(Exception):
         super().__init__(self.message)
 
 MAX_LENGTH = 120 # time in minutes of longest possible trip
+DATETYPES = ['datetime64[ns]', '<M8[ns]']
 
 # helper
 def get_folder_paths(folder_name: str) -> dict:
@@ -75,7 +76,7 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     shortest = len(df) # used for print statement
 
     try: # reformat weather data specifically
-        precip_label = get_label(df, 'total precip mm')
+        precip_label = get_label(df.columns, 'total precip mm')
         df.drop(['Longitude_x', 'Latitude_y'], axis=1, inplace=True)
         df["precip"] = (df[precip_label] > 0)
         df['precip'] = df['precip'].astype(int)
@@ -83,7 +84,7 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
         pass
 
     try: # reformat trip data and filter out outlier trips
-        duration_label, startid_label, endid_label = get_label_list(df, ['Trip_Duration', 'Start_Station_Id', 'End_Station_Id'])
+        duration_label, startid_label, endid_label = get_label_list(df.columns, ['Trip_Duration', 'Start_Station_Id', 'End_Station_Id'])
         df[endid_label] = df[endid_label].astype(int)
         df["Trip_Duration_min"] = round(df[duration_label]/60, 2)
         df = df.loc[(df["Trip_Duration_min"] <= MAX_LENGTH) 
@@ -99,21 +100,22 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     return df
 
 # Pure (returns new dataframe object)
-def get_label_list(df: pd.DataFrame, column_names: list[str]) -> list[str]:
+def get_label_list(possible_labels: Iterable | list[str], column_names: list[str]) -> list[str]:
     new_labels = column_names.copy()
     for i in range(len(column_names)):
-        new_labels[i] = get_label(df, column_names[i])
+        new_labels[i] = get_label(possible_labels, column_names[i])
     return new_labels
 
 # Pure helper
-def get_label(df: pd.DataFrame, label: str) -> str:
-    """Finds column in a dataset. Does not add columns."""
+def get_label(possible_labels: Iterable | list[str], label: str) -> str:
+    """Finds corresponding str <label> among the options
+     in <possible_labels>. Does not modify possible_labels."""
     # TODO use regex
     bycol = None
-    if label in df.columns: # option 1
+    if label in possible_labels: # option 1
         return label
     
-    for col in df.columns: # check option 2 or 3 to look for column
+    for col in possible_labels: # check option 2 or 3 to look for column
         splitter = '_' if '_' in label else ' '
         test_list = [int(item in col.lower()) for item in label.split(splitter)]
         
@@ -129,13 +131,12 @@ def get_label(df: pd.DataFrame, label: str) -> str:
 def get_col_count(df: pd.DataFrame, bycol: list[str], 
                   new_col_name: str = 'count', 
                   new: bool = False, 
-                  keep: list = None) -> pd.DataFrame:
+                  keep: list = []) -> pd.DataFrame:
     """Calls groupby on dataframe and returns a new dataframe with two columns:
     first column is the grouper column, second is the count. 
     <bycol> is a list of one or more labels
     """
-    bycol= get_label_list(df, bycol)
-    rename = False
+    bycol= get_label_list(df.columns, bycol)
     df = df.reset_index() # add 'index' column that can be used for count
     if new: # create new dataframe
         df = df.groupby(bycol, observed=False).count().reset_index()
@@ -148,44 +149,64 @@ def get_col_count(df: pd.DataFrame, bycol: list[str],
     # ELSE: add column to existing dataframe
     df[new_col_name] = df.groupby(bycol, dropna=False, observed=True)['index'].transform('count')
     if keep: # return subset of columns
-        keep = get_label_list(df, keep)
+        keep = get_label_list(df.columns, keep)
         keep_list = [item for item in keep if item in df.columns]
         if keep_list != keep:
             print(f"Could not keep all columns in {keep} because they were not valid columns")
         return df.filter(bycol + keep_list + [new_col_name])
     return df
 
-# pure
-def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
-    # TODO! split into multiple columns
+def get_count_table(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count') -> pd.DataFrame:
+    """Returns table with columns in <bycol> and their count."""
+    bycol= get_label_list(df.columns, bycol)
+    df = df.reset_index() # add 'index' column that can be used for count
+    df = df.groupby(bycol, observed=False).count().reset_index()
+    df.rename({'index': new_col_name}, axis=1, inplace=True)
+    return df.filter(bycol + [new_col_name])
+
+# DEPRECATED
+def DEADadd_col(df: pd.DataFrame, names: list[str]):
     """Add categorical columns after creating bins.
     Possible <names> options: 'date', 'month', 'season', 
     'timeperiod', 'weekday', 'weather', 'cost', 'datetime'"""
-    print("Creating columns:", names)
-    df = df.copy()
-    # check if there's a datetime column or if it must be added
-    datetime_cols = ['datetime', 'date', 'month', 'season', 'timeperiod', 'weekday']
-    check_date = False
-    possible = datetime_cols + ['weather', 'cost']
-    for name in names:
-        if name in datetime_cols:
-            check_date = True
-        if name not in possible:
-            raise InvalidColError(name)
-    if check_date:
-        # look for datetime column and mutates df (the copy of the original)
-        date_cols = get_datetime_col(df)
-        print("Datetime column found")
-        if len(date_cols) > 1:
-            start_label = get_label(df, 'start time')
-        date_col = date_cols[0]
-    if 'date' in names:
-        df['date'] = df[date_col].dt.date
-    if 'month' in names  and 'month' not in df.columns:
-        df['month'] = df[date_col].dt.strftime("%B")
-    if 'weekday' in names  and 'weekday' not in df.columns:
-        df['weekday'] = df[date_col].dt.strftime("%A")
-    if 'season' in names  and 'season' not in df.columns:
+    # print("Creating columns:", names)
+    # df = df.copy()
+    # # check if there's a datetime column or if it must be added
+    # datetime_cols = ['datetime', 'date', 'month', 'season', 'timeperiod', 'weekday']
+    # check_date = False
+    # possible = datetime_cols + ['weather', 'cost']
+    # for name in names:
+    #     if name in datetime_cols:
+    #         check_date = True
+    #     if name not in possible:
+    #         raise InvalidColError(name)
+    # if check_date:
+    #     # look for datetime column and mutates df (the copy of the original)
+    #     date_cols = get_datetime_col(df)
+    #     print("Datetime column found")
+    #     if len(date_cols) > 1:
+    #         start_label = get_label(df.columns, 'start time')
+    #     date_col = date_cols[0]
+    # if 'date' in names:
+    #     df['date'] = df[date_col].dt.date
+
+    # return df
+
+# MUTATES
+def add_col_Periods(df: pd.DataFrame, columns: list[str]) -> list[str]:
+    """<columns> can be 'month', 'weekday', 'season', 'timeperiod'"""
+    succeeded = []
+    possible_date_cols = get_datetime_col(df)
+    if len(possible_date_cols) == 0:
+        raise NoDateColumnsError
+    datetime_col = add_col_Datetime(df)
+    if 'month' in columns  and 'month' not in df.columns:
+        df['month'] = df[datetime_col].dt.strftime("%B")
+        succeeded.append('month')
+    if 'weekday' in columns  and 'weekday' not in df.columns:
+        df['weekday'] = df[datetime_col].dt.strftime("%A")
+        succeeded.append('weekday')
+    if 'season' in columns  and 'season' not in df.columns:
         bins = [pd.to_datetime('12/21/2022'), 
                     pd.to_datetime('03/20/2023'), 
                     pd.to_datetime('06/20/2023'), 
@@ -193,35 +214,81 @@ def add_col(df: pd.DataFrame, names: list[str]) -> pd.DataFrame:
                     pd.to_datetime('12/20/2023'),
                     pd.to_datetime('12/31/2023')] # right inclusive, include last  
         labels = ["Winter", "Spring", "Summer", "Fall", "Winter"]
-        df["season"] = pd.cut(df[date_col].dt.date, bins=bins, include_lowest=True, ordered=False, labels=labels)
-
-    if ('timeperiod' in names) and start_label: # checks if start_label (= trips dataset)
+        df["season"] = pd.cut(df[datetime_col], bins=bins, include_lowest=True, ordered=False, labels=labels)
+        succeeded.append('season')
+    if 'timeperiod' in columns: 
         bins = [pd.to_datetime('00:00:00').time(), pd.to_datetime('06:00:00').time(), 
                 pd.to_datetime('10:00:00').time(), pd.to_datetime('15:00:00').time(),
                 pd.to_datetime('19:00:00').time(), pd.to_datetime('23:00:00').time(),
                 pd.to_datetime('23:59:59').time()]
         labels = ["Overnight", "AM", "Midday", "PM", "Evening", "Overnight"]
-        df["timeperiod"] = pd.cut(df[start_label].dt.time, bins=bins, include_lowest=True, ordered=False, labels=labels)
-    
-    if 'weather' in names:  
-        bins = [-16, 0, 5, 15, 30]
-        labels = ["Freezing", "Cold", "Cool", "Warm"]
-        col_name = None
-        for col in df.columns:
-            if 'temp' in col.lower() and 'mean' in col.lower():
-                col_name = col
-        if col_name is None:
-            raise InvalidColError(col_name)
-        df["temp_range"] = pd.cut(df[col_name], 
-                bins=bins, include_lowest=True, labels=labels)
-    
-    if 'cost' in names:
-        user_col, dur_col = get_label(df, 'user type'), get_label(df, 'trip duration')
-        df['cost'] = df.apply(lambda x : calculate_cost(x, user_col, dur_col), axis=1)
+        df["timeperiod"] = pd.cut(df[datetime_col], bins=bins, include_lowest=True, ordered=False, labels=labels)
+        succeeded.append('timeperiod')
+    return succeeded
 
-    return df
+def add_col_Date(df: pd.DataFrame) -> str:
+    """Adds columns 'date' to the dataframe"""
+    datetime_col = add_col_Datetime(df)
+    df['date'] = df[datetime_col].dt.date
+    return datetime_col
 
-# helper 
+def add_col_Datetime(df: pd.DataFrame) -> str:
+    """Modifies dataframe to make sure there's a valid datetime column
+    and returns that column label (or first if there are multiple options)"""
+    
+    # datetime_col = get_label(df.columns, 'start time') # ensure valid datetime column
+    possible_datecols = get_datetime_col(df)
+    if len(possible_datecols) == 0:
+        raise NoDateColumnsError
+    convert_datecol(df, possible_datecols)
+    try: 
+        datetime_col = get_label(possible_datecols, 'start time')
+    except InvalidColError:
+        datetime_col = possible_datecols[0]
+    return datetime_col
+
+def convert_datecol(df: pd.DataFrame, columns: list[str]):
+    """Attempts to convert every column in <columns> to a datetime column
+    Assumes all columns in <columns> are in df.columns"""
+    for col in columns:
+        try:
+            if df[col].dtype not in DATETYPES:
+                df[col] = pd.to_datetime(df[col])
+        except ValueError:
+            pass
+    return
+
+# HELPER (MUTATES)
+def get_datetime_col(df: pd.DataFrame) -> list[str]:
+    """Returns list of the columns in <df> that could be datetime objects."""
+    date_cols = []
+    for col in df.columns:
+        correct_name = 'date' in col.lower() or 'time' in col.lower()
+        correct_type = df[col].dtype in DATETYPES or df[col].dtype == 'object'
+        if correct_name and correct_type:
+            date_cols.append(col)
+    return date_cols
+
+# MUTATE
+def add_col_Weather(df: pd.DataFrame) -> str: 
+    bins = [-16, 0, 5, 15, 30]
+    labels = ["Freezing", "Cold", "Cool", "Warm"]
+    try: 
+        col_name = get_label(df.columns, 'mean temp')
+        df["temp_range"] = pd.cut(df[col_name], bins=bins, 
+                                  include_lowest=True, labels=labels)
+    except InvalidColError:
+        print("This dataframe does not have weather-type columns")
+    return 'temp_range'
+
+# MUTATE
+def add_col_Cost(df: pd.DataFrame) -> str:
+    """Adds cost column to the dataframe"""
+    user_col, dur_col = get_label(df.columns, 'user type'), get_label(df.columns, 'trip duration')
+    df['cost'] = df.apply(lambda x : calculate_cost(x, user_col, dur_col), axis=1)
+    return 'cost'
+
+# pure helper 
 def calculate_cost(row, user_col: str, dur_col: str):
     user_type = row[user_col]
     if user_type == 'Casual Member':
@@ -241,8 +308,8 @@ def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: bool = False) -> pd.Da
     else: # if od is passed
         st_orig = st.copy()
         st_dest = st.copy()
-    orig_id_label = get_label(tr, 'start station id') # returns label
-    dest_id_label = get_label(tr, 'end station id')
+    orig_id_label = get_label(tr.columns, 'start station id') # returns label
+    dest_id_label = get_label(tr.columns, 'end station id')
     st_orig[orig_id_label] = st_orig['station_id']
     st_dest[dest_id_label] = st_dest['station_id']
     
@@ -284,46 +351,13 @@ def renamer(keys: Iterable, addition: str, avoider: str) -> dict:
     return namer
 
 # pure
-def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left') -> pd.DataFrame:
-    """Returns a new dataframe that represents <df1> and <df2> merged on 
-    the column <oncol> using the method <how>."""
-    
-    if oncol not in df1.columns:
-        df1 = add_col(df1, [oncol])
-    if oncol not in df2.columns:
-        df2 = add_col(df2, [oncol])
-    if how == 'left_on':
-        df = pd.merge(df1, df2, left_on=oncol, right_on=oncol)
-    else:
-        df = pd.merge(df1, df2, on=oncol, how=how)
-    # print("DF1 info")
-    # df1.info()
-    # print("DF2 info")
-    # df2.info()
-    # print("MERGED info")
-    # df.info()
+def merge_on_date(df1: pd.DataFrame, df2: pd.DataFrame) -> pd.DataFrame:
+    """Returns a new dataframe that represents <df1> and <df2> merged  
+    on their date columns"""
+    add_col_Date(df1)
+    add_col_Date(df2)
+    df = pd.merge(df1, df2, on='date')
     return df
-
-# HELPER (MUTATES)
-def get_datetime_col(df: pd.DataFrame) -> list[str]:
-    """Returns list of the column labels that are datetime objects.
-    Converts columns to datetime objects if they're not.
-    (eventually consider standardizing column names)"""
-    datetypes = ['datetime64[ns]', '<M8[ns]']
-    date_cols = []
-    for col in df.columns:
-        if 'date' in col.lower() or 'time' in col.lower():
-            if df[col].dtype in datetypes:
-                date_cols.append(col)
-            if df[col].dtype == 'object':
-                try:
-                    df[col] = pd.to_datetime(df[col])
-                    date_cols.append(col)
-                except ValueError:
-                    pass
-    if len(date_cols) == 0:
-        raise NoDateColumnsError()
-    return date_cols
 
 
 # pandas commands
@@ -332,7 +366,7 @@ def get_datetime_col(df: pd.DataFrame) -> list[str]:
 #     df.drop('index', axis=1, inplace=True)
 
 # if 'trip_count' in names and 'trip_count' not in df.columns:
-#     tripid_label = get_label(df, 'trip id')
+#     tripid_label = get_label(df.columns, 'trip id')
 #     df['trip_count'] = df.groupby([tripid_label])[tripid_label].transform('count')
 
 # df['count'] = df.groupby('group').cumcount()+1
@@ -346,3 +380,24 @@ def get_datetime_col(df: pd.DataFrame) -> list[str]:
         #         rename = col # find column to mutate
         # if not rename:
         #     raise NoIndexTypeColumn()
+
+# dead merge_on
+# def merge_on(df1: pd.DataFrame, df2: pd.DataFrame, oncol: str, how: str = 'left') -> pd.DataFrame:
+#     """Returns a new dataframe that represents <df1> and <df2> merged on 
+#     the column <oncol> using the method <how>."""
+    
+#     if oncol not in df1.columns:
+#         df1 = add_col(df1, [oncol])
+#     if oncol not in df2.columns:
+#         df2 = add_col(df2, [oncol])
+#     if how == 'left_on':
+#         df = pd.merge(df1, df2, left_on=oncol, right_on=oncol)
+#     else:
+#         df = pd.merge(df1, df2, on=oncol, how=how)
+#     # print("DF1 info")
+#     # df1.info()
+#     # print("DF2 info")
+#     # df2.info()
+#     # print("MERGED info")
+#     # df.info()
+#     return df

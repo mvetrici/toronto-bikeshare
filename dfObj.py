@@ -1,5 +1,5 @@
 import pandas as pd
-from pd_helpers import station_merge, merge_on, IncompatibleDataframes
+from pd_helpers import station_merge, merge_on_date, IncompatibleDataframes
 
 MAX_LENGTH = 120
 
@@ -55,12 +55,11 @@ class dfObj():
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
             new_df = station_merge(df1, df2)
-            # new_df = add_col(new_df, ['trip_count'])
         
         if self._dtype in dfObj.weather_type and add_df._dtype == 'Weather':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
-            new_df = merge_on(df1, df2, oncol='date')
+            new_df = merge_on_date(df1, df2)
         
         if new_df.empty:
             raise IncompatibleDataframes()
@@ -89,10 +88,10 @@ class dfObj():
         if self._dtype in bike_type and add_df._dtype == 'BikeStation':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
-            new_df = station_merge(df1, df2, 'od')
+            new_df = station_merge(df1, df2, od=True)
         
         if new_df.empty:
-            raise IncompatibleDataframes("Dataframes are incompatible")
+            raise IncompatibleDataframes()
         
         new_name = 'OD-merge-' + self.name.split('.')[0]
         new_dtype = 'OD' 

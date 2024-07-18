@@ -2,7 +2,7 @@ import geopandas as gpd
 import pandas as pd
 from folderProcessor import folderProcessor
 from typing import Iterable 
-from pd_helpers import get_label, add_col, get_col_count, station_merge
+from pd_helpers import get_label, get_col_count, station_merge
 from shapely.geometry import Point
 import zipfile, re, os
 import matplotlib.pyplot as plt
@@ -23,11 +23,11 @@ def coords_from_df(df: pd.DataFrame) -> gpd.GeoDataFrame:
             lat = col
         if 'lon' in col:
             long = col
-    # lat, long = get_label(df, 'lat'), get_label(df, 'lon')
+    # lat, long = get_label(df.columns, 'lat'), get_label(df.columns, 'lon')
     df = df.copy()
     # df['y'], df['x'] = df[lat], df[long]
     geometry = get_coordinate(df[lat], df[long])
-    return gpd.GeoDataFrame(df, crs="EPSG:4326", geometry=geometry) # WGS84 global 
+    return gpd.GeoDataFrame(data=df, crs="EPSG:4326", geometry=geometry) # WGS84 global 
 
 def load_dem_shp(zip_file):
     """Loads DEM shapefile in zipped folder.
@@ -185,5 +185,4 @@ if __name__ == '__main__':
     #  Load all DEM shapefiles into a list of GeoDataFrames
     # dems_gdf_list = [load_dem_shp(zip_file) for zip_file in zip_files]
     trip_station = run_df(TRIPS, DATA)
-    df = run_map(trip_station)
-    run_map(df)
+    run_map(trip_station)
