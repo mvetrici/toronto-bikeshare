@@ -6,6 +6,7 @@ import numpy as np
 from pd_helpers import get_label, add_col_Datetime, add_col_Periods, add_col_Date, \
     get_col_count, get_label_list, add_col_Weather, add_col_Cost, InvalidColError, get_count_table
 from folderProcessor import folderProcessor
+# in progress
 
 TRIPS = "bikeshare-ridership-2023"
 JANTRIPS = r"Bike share ridership 2023-01.csv"
@@ -16,7 +17,7 @@ COLOURS = ['lightsteelblue', 'bisque', 'turquoise', 'khaki', 'salmon', 'peachpuf
 def visualize_cost():
     trips_folder = folderProcessor(TRIPS, 'test')
     other_folder = folderProcessor(DATA)
-    df = trips_folder.combine_merge(other_folder).get_df()
+    df = trips_folder.combine_merge(other_folder)[0].get_df()
     add_col_Weather(df)
     add_col_Cost(df)
 

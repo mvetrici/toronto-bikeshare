@@ -1,7 +1,7 @@
 import pandas as pd
 from pd_helpers import station_merge, merge_on_date, IncompatibleDataframes
 
-MAX_LENGTH = 120
+MAX_LENGTH = 120 # sets the max length (in minutes) of a trip
 
 class dfObj():
     """A dataframe object. 

@@ -39,4 +39,4 @@ class Testadd_cols(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
-    # pass ClassName() if multiple classes
+    # pass ClassName() as argument if multiple classes

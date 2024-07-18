@@ -1,5 +1,4 @@
 from folderProcessor import folderProcessor
-from dfObj import dfObj
 from pd_helpers import df_from_file, get_col_count, get_label
 import pandas as pd
 import os

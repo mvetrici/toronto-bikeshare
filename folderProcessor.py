@@ -3,6 +3,7 @@ import os
 from dfObj import dfObj
 from pd_helpers import df_from_file, IncompatibleDataframes, get_folder_paths
 
+# user-defined types of datasets
 TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or combination joined by -
 
 class folderProcessor():
