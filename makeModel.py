@@ -15,7 +15,7 @@ COLOURS = ['lightsteelblue', 'bisque', 'turquoise', 'khaki', 'salmon', 'peachpuf
 
 # in progress
 def visualize_cost():
-    trips_folder = folderProcessor(TRIPS, 'test')
+    trips_folder = folderProcessor(TRIPS, '08')
     other_folder = folderProcessor(DATA)
     df = trips_folder.combine_merge(other_folder)[0].get_df()
     add_col_Weather(df)
@@ -66,7 +66,7 @@ def dura_dist(df: pd.DataFrame, groupby: str = ''):
     plt.show()
 
 # in progress
-def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = None):
+def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = ''):
     """Plots ONE layered distribution of trip durations between <num_pairs> most common station pairs.
     Does not modify dataframes.
     If <num_pairs> > 1, will create new windows.
@@ -155,9 +155,9 @@ def DEADtrips_per_hour(df: pd.DataFrame):
     # return
 
 def minutes_since_midnight(timestamp, interval_size: int = 60) -> float:
-    """Returns number of minutes between <timestamp> and midnight
-    OLD: If <interval_size> is specified (in minutes), returns the number
-    of intervals between <timestamp> and midnight."""
+    """Returns number of minutes between timestamp and midnight
+    OLD: If interval_size is specified (in minutes), returns the number
+    of intervals between timestamp and midnight."""
     
     midnight = timestamp.replace(hour=0, minute=0, second=0, microsecond=0)
     min_since_midnight = (timestamp - midnight).total_seconds() / 60

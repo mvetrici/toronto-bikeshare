@@ -1,5 +1,5 @@
 from folderProcessor import folderProcessor
-from pd_helpers import df_from_file, get_col_count, get_label
+from pd_helpers import df_from_file, get_col_count, get_label, add_col_Periods
 import pandas as pd
 import os
 from gpd_helpers import run_map 
@@ -12,6 +12,11 @@ def check_write():
     if checker in ['yes', 'y', 'YES', 'Yes', 'Y']:
         return True
     return False
+
+def write_path(title) -> str:
+    """Returns file path so that saved file goes to the directory
+    that holds the repo rather than in the repo."""
+    return os.path.join(os.path.dirname(os.getcwd()), title)
 
 def DEAD_day_count(df: pd.DataFrame):
     """DEPRECATED"""
@@ -50,24 +55,46 @@ def top_n_stations_dur(df: pd.DataFrame, n: int = 20, write: bool = False) -> pd
     ret = ret.filter(['Start_Station_Id', "End_Station_Id", 'lat_orig', 'lon_orig', 'lat_dest', 'lon_dest', 'count', 'mean_dur'])
     ret = ret.drop_duplicates()
     if write and check_write():
-        file = os.path.join(os.path.dirname(os.getcwd()), f"top_{n}_trips_by_duration.csv")
+        file = write_path(f"top_{n}_trips_by_duration.csv")
         ret.iloc[0:n].to_csv(file)
     # o = list(check['Start_Station_Id'].iloc[0:4])
     # d = list(check['End_Station_Id'].iloc[0:4])
     return ret
 
-def run_nodes(trip_data: str, add_data: str, top_n: int):
-    bike_data = folderProcessor(trip_data, 'test')
-    data = folderProcessor(folder_name=add_data)
-    df = bike_data.combine_merge(data, station_only=True)[0].get_df()
+def run_nodes(df: pd.DataFrame, top_n: int = 20):
+    """Converts *df* to station and plots them;
+    *df* is trips with merged geo data."""
     nodes = top_n_stations_dur(df, n=top_n, write=False)
     run_map(nodes) 
     return 
 
-if __name__ == '__main__':
+def prepare_nodes(trip_data: str, add_data: str, month: str = '08', subset: bool = True) -> pd.DataFrame:
+    """Merges trips data *trip_data* and station data *add_data*.
+    Optionally, specify the month that is processed (August if not)."""
+    bike_data = folderProcessor(trip_data, month)
+    data = folderProcessor(folder_name=add_data)
+    df = bike_data.combine_merge(data, station_only=True)[0].get_df()
+    add_col_Periods(df, ['timeperiod'])
+    if subset:
+        df = df.loc[df['timeperiod'].isin(['AM', 'PM', 'Midday'])]
+        df = df.sample(10000, axis=0)
+    if check_write():
+        df.to_csv(write_path(f"{month}-trips-station_xy.csv"), index=False)
+    print(df)
+    df.info()
+    print(df['timeperiod'].unique())
+    return df
+    
+def controlled_loop():
     months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
     for month in months:
-        trip_data = folderProcessor(TRIPS, month).get_obj().get_df()
+        trip_data = folderProcessor(TRIPS, month).get_obj().get_df()    
+    pass 
+
+if __name__ == '__main__':
+    df = prepare_nodes(TRIPS, DATA, '11')
+    
+    
         
 
     

@@ -27,15 +27,6 @@ class NoIndexTypeColumn(Exception):
 MAX_LENGTH = 120 # time in minutes of longest possible trip
 DATETYPES = ['datetime64[ns]', '<M8[ns]']
 
-# helper
-def get_folder_paths(folder_name: str) -> dict:
-    folder_path = os.path.abspath(folder_name)
-    folder_dict = {}
-    for file in os.listdir(folder_path):
-        if file.endswith(".csv"):
-            data_path = os.path.join(folder_path, file)
-            folder_dict[file] = data_path
-    return folder_dict
 
 def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     """<path> is a path to a csv file
@@ -193,7 +184,8 @@ def DEADadd_col(df: pd.DataFrame, names: list[str]):
 
 # MUTATES
 def add_col_Periods(df: pd.DataFrame, columns: list[str]) -> list[str]:
-    """<columns> can be 'month', 'weekday', 'season', 'timeperiod'"""
+    """columns can be 'month', 'weekday', 'season', 'timeperiod.
+    Mutates df in-place'"""
     succeeded = []
     possible_date_cols = get_datetime_col(df)
     if len(possible_date_cols) == 0:
@@ -216,12 +208,14 @@ def add_col_Periods(df: pd.DataFrame, columns: list[str]) -> list[str]:
         df["season"] = pd.cut(df[datetime_col], bins=bins, include_lowest=True, ordered=False, labels=labels)
         succeeded.append('season')
     if 'timeperiod' in columns: 
+        df['time'] = df[datetime_col].dt.time
         bins = [pd.to_datetime('00:00:00').time(), pd.to_datetime('06:00:00').time(), 
                 pd.to_datetime('10:00:00').time(), pd.to_datetime('15:00:00').time(),
                 pd.to_datetime('19:00:00').time(), pd.to_datetime('23:00:00').time(),
                 pd.to_datetime('23:59:59').time()]
         labels = ["Overnight", "AM", "Midday", "PM", "Evening", "Overnight"]
-        df["timeperiod"] = pd.cut(df[datetime_col], bins=bins, include_lowest=True, ordered=False, labels=labels)
+        df["timeperiod"] = pd.cut(df['time'], bins=bins, include_lowest=True, ordered=False, labels=labels)
+        df.drop(['time'], axis=1, inplace=True)
         succeeded.append('timeperiod')
     return succeeded
 
@@ -295,48 +289,66 @@ def calculate_cost(row, user_col: str, dur_col: str):
     return 0.3 # user is Annual Member
 
 # pure
-def station_merge(tr: pd.DataFrame, st: pd.DataFrame, od: bool = False) -> pd.DataFrame:
+def station_merge_on_trip(trips: pd.DataFrame, stations: pd.DataFrame, remove_extra_col: bool = True) -> pd.DataFrame:
     """Merges two dataframes based on the station id column.
     <tr> represents trip data, <st> represents station data
     If <od> passed, returns dataframe with each station's n. of origins and destinations.
     Otherwise, doesn't modify the <tr> dataframe and only appends columns  
     with station information for the origin and destination stations"""
-    if not od:
-        st_orig = st.rename(renamer(st.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
-        st_dest = st.rename(renamer(st.columns, '_dest', 'station_id'), axis=1)
-    else: # if od is passed
-        st_orig = st.copy()
-        st_dest = st.copy()
+    # rename creates a copy
+    if remove_extra_col:
+        to_drop = ['physical_configuration', 'altitude', 'address', 'is_charging_station', 'rental_methods', 'groups', 'post_code']
+        stations.drop(to_drop, axis=1, inplace=True)
+    
+    st_orig = stations.rename(renamer(stations.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
+    st_dest = stations.rename(renamer(stations.columns, '_dest', 'station_id'), axis=1)
+    
+    orig_id_label = get_label(trips.columns, 'start station id')
+    dest_id_label = get_label(trips.columns, 'end station id')
+    st_orig[orig_id_label] = st_orig['station_id']
+    st_dest[dest_id_label] = st_dest['station_id']
+    st_dest.drop('station_id', axis=1, inplace=True)
+    st_orig.drop('station_id', axis=1, inplace=True)
+    
+    output = pd.merge(st_orig, trips, on=orig_id_label, how='left')
+    output = pd.merge(st_dest, output, on=dest_id_label, how='left')
+    output.dropna(subset=['lat_orig'], axis=0, how='any', inplace=True)
+
+    # dead code
+    # output = pd.merge(tr, st_orig, on=orig_id_label, how='left')
+    # output = pd.merge(output, st_dest, on = dest_id_label, how='left')
+
+    return output
+
+def station_merge_on_station_for_od(tr: pd.DataFrame, st: pd.DataFrame) -> pd.DataFrame:
+    """Merges two dataframes based on the station id column.
+    <tr> represents trip data, <st> represents station data.
+    Left column
+    Returns dataframe with each station's n. of origins and destinations.
+    Otherwise, doesn't modify the <tr> dataframe and only appends columns  
+    with station information for the origin and destination stations"""
+    st_orig = st.copy()
+    st_dest = st.copy()
+
     orig_id_label = get_label(tr.columns, 'start station id') # returns label
     dest_id_label = get_label(tr.columns, 'end station id')
     st_orig[orig_id_label] = st_orig['station_id']
     st_dest[dest_id_label] = st_dest['station_id']
     
-    if od:
-        orig_count_label = 'count_orig'
-        dest_count_label = 'count_dest'
-        orig_count = get_col_count(tr, ['start station id'], orig_count_label)
-        dest_count = get_col_count(tr, ['end station id'], dest_count_label)
-        # print('check int or float')
-        # print(dest_count)
-        
-        st_orig = pd.merge(st_orig, orig_count, on=orig_id_label, how='left')
-        st_dest = pd.merge(st_dest.filter(['station_id', dest_id_label]), dest_count, on=dest_id_label, how='left')
-
-        output = pd.merge(st_orig, st_dest, on='station_id', how='outer')
-        output.fillna({orig_count_label: 0, dest_count_label: 0}, inplace=True)
-        output[orig_count_label] = output[orig_count_label].astype(int)
-        output[dest_count_label] = output[dest_count_label].astype(int)
-        output.drop([orig_id_label, dest_id_label], inplace=True, axis=1)
-        return output
+    orig_count_label = 'count_orig'
+    dest_count_label = 'count_dest'
+    orig_count = get_col_count(tr, ['start station id'], orig_count_label)
+    dest_count = get_col_count(tr, ['end station id'], dest_count_label)
     
-    output = pd.merge(tr, st_orig, on=orig_id_label, how='left')
-    output = pd.merge(output, st_dest, on = dest_id_label, how='left')
+    st_orig = pd.merge(st_orig, orig_count, on=orig_id_label, how='left')
+    st_dest = pd.merge(st_dest.filter(['station_id', dest_id_label]), dest_count, on=dest_id_label, how='left')
 
-    # output = pd.merge(tr, st_orig, on=name, how='left')
-    # output.drop('station_id', axis=1, inplace=True)
-    # st_dest.drop('station_id', axis=1, inplace=True)
-
+    output = pd.merge(st_orig, st_dest, on='station_id', how='outer')
+    output.fillna({orig_count_label: 0, dest_count_label: 0}, inplace=True)
+    output[orig_count_label] = output[orig_count_label].astype(int)
+    output[dest_count_label] = output[dest_count_label].astype(int)
+    output.drop([orig_id_label, dest_id_label], inplace=True, axis=1)
+    
     return output
 
 # helper

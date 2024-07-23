@@ -1,5 +1,5 @@
 import pandas as pd
-from pd_helpers import station_merge, merge_on_date, IncompatibleDataframes
+from pd_helpers import station_merge_on_station_for_od, station_merge_on_trip, merge_on_date, IncompatibleDataframes
 
 MAX_LENGTH = 120 # sets the max length (in minutes) of a trip
 
@@ -54,7 +54,7 @@ class dfObj():
         if self._dtype in dfObj.bike_type and add_df._dtype == 'BikeStation':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
-            new_df = station_merge(df1, df2)
+            new_df = station_merge_on_trip(df1, df2)
         
         if self._dtype in dfObj.weather_type and add_df._dtype == 'Weather':
             # check for columns before merging, but only add to base
@@ -88,7 +88,7 @@ class dfObj():
         if self._dtype in bike_type and add_df._dtype == 'BikeStation':
             # check for columns before merging, but only add to base
             # add to COPIED base, don't mutate class object dataframe
-            new_df = station_merge(df1, df2, od=True)
+            new_df = station_merge_on_station_for_od(df1, df2)
         
         if new_df.empty:
             raise IncompatibleDataframes()

@@ -2,7 +2,7 @@ import geopandas as gpd
 import pandas as pd
 from folderProcessor import folderProcessor
 from typing import Iterable 
-from pd_helpers import get_label, get_col_count, station_merge
+from pd_helpers import get_label, get_col_count, station_merge_on_trip
 from shapely.geometry import Point
 import zipfile, re, os
 import matplotlib.pyplot as plt
@@ -139,12 +139,13 @@ def get_nodes(df: pd.DataFrame) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     dests = coords_from_df(df.loc[:,df.columns.str.endswith('_dest')])
     return origins, dests
 
-def run_df(trips: str, other_data: str) -> pd.DataFrame:
+def run_df(trips: str, other_data: str, month: str = '08') -> pd.DataFrame:
     """<trips> represents folder with trip data
-    <other_data> represents folder with location/other datasets
-    Note: uses 'test'!!!"""
+    <other_data> represents folder with location/other datasets.
+    Returns a dataframe merged on the trip for most common stations"""
+    # TODO: made changes to merging function
     
-    trip_data = folderProcessor(trips, 'test').get_obj().get_df()
+    trip_data = folderProcessor(trips, month).get_obj().get_df()
     # other_folder = folderProcessor(data)
     # df = trips_folder.combine_merge(other_folder)[0].get_df()
     # df = add_col(df, ['weather', 'cost', 'timeperiod'])
@@ -155,7 +156,7 @@ def run_df(trips: str, other_data: str) -> pd.DataFrame:
     filtered = trip_data.loc[(trip_data["Start_Station_Id"].isin(o)) & (trip_data["End_Station_Id"].isin(d))].reset_index()
     # filtered = trip_data.loc[lambda trip_data: (trip_data['Start_Station_Id'] in o) & (trip_data['End_Station_Id'] in d)]
     st = folderProcessor(other_data).get_obj(dtype="BikeStation").get_df()
-    return station_merge(filtered, st)
+    return station_merge_on_trip(filtered, st)
     # return filtered
 
 def run_map(trip_station: pd.DataFrame):

@@ -1,35 +1,52 @@
 import pandas as pd
 import os
 from dfObj import dfObj
-from pd_helpers import df_from_file, IncompatibleDataframes, get_folder_paths
+from pd_helpers import df_from_file, IncompatibleDataframes
 
 # user-defined types of datasets
 TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or combination joined by -
 
+class PathNotFound(Exception):
+    def __init__(self, attempted_month):
+        self.message = f"Data path to month {attempted_month} could not be found"
+        super().__init__(self.message)
+
+class GetObjError(Exception):
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
+
+class NoDataframesFoundError(Exception):
+    def __init__(self):
+        self.message = "No dataframe objects exist"
+        super().__init__(self.message)
+
 class folderProcessor():
-    def __init__(self, folder_name: str = 'Empty folder', test: str = ''):
+    def __init__(self, folder_name: str = 'Empty folder', month: str = ''):
         """Converts files in folder <folder_name> to pandas dataframes. 
-        <test> can be 'test' (for Jan) or the month of interest (format 'MM').
+        *test* is the month of interest in the format 'MM'.
         self.name: folder name (str)
         self.dfs: list of dataframe objects (list[dfObj])
         """
+        # TODO: test!!
         self.name = folder_name
         self._types = []
         self._dfs = []
         keys = {}
         if folder_name != 'Empty folder':
-            folder_paths = get_folder_paths(folder_name)
+            folder_paths = get_folder_paths(folder_name) # paths in the folder
             keys = folder_paths.keys()
 
-        if test:
-            if test != 'test':
-                data_path = folder_paths.get(f'Bike share ridership 2023-{test}.csv')
-            else: 
-                data_path = folder_paths.get(f'Bike share ridership 2023-08.csv')
-            df = df_from_file(data_path)
-            df_obj = make_df(data_path, df)
-            self._dfs.append(df_obj)
-            self._types.append(df_obj.get_type())
+        if folder_name == 'bikeshare-ridership-2023' and month:
+            data_path = folder_paths.get(f'Bike share ridership 2023-{month}.csv')
+            
+            if data_path is not None:
+                df = df_from_file(data_path)
+                df_obj = make_df(data_path, df)
+                self._dfs.append(df_obj)
+                self._types.append(df_obj.get_type())
+            else:
+                raise PathNotFound(month)
         
         else: # runs for all files in folder
             for file in keys:
@@ -74,8 +91,9 @@ class folderProcessor():
     #     return ret
     
     def combine_merge(self, add_folder: 'folderProcessor', station_only: bool = False) -> list[dfObj]:
-        """Returns a list of the dataframes in <self> each 
-        merged with all possible dataframes in <add_folder>."""
+        """Returns a list of the dataframes in self each 
+        merged with all possible dataframes in add_folder.
+        station_only only merges with BikeStation-type dataframes"""
         ret = []
         for base_obj in self._dfs: # base_obj is the base merging dataframe
            base = base_obj
@@ -103,21 +121,19 @@ class folderProcessor():
             df_obj.getinfo()
         return
     
-    def get_obj(self, index: int = 0, dtype: str = None) -> dfObj:
-        """<index> or <type> must be valid. Valid types:
+    def get_obj(self, index: int = 0, dtype: str = '') -> dfObj:
+        """index or type must be valid. Valid types:
         "Trip", 'Weather', "BikeStation", 'TTCStation'"""
         if len(self._dfs) == 0:
-            print("No dataframe objects exist")
-            return
+            raise NoDataframesFoundError()
         if index:
             if index < len(self._dfs):
                 return self._dfs[index]
-            print(f"Invalid index: folder contains {len(self._dfs)} object(s)")
-            return
+            else:
+                raise GetObjError(f"Invalid index: folder contains {len(self._dfs)} object(s)")
         if dtype:
             if dtype not in TYPES or dtype not in self._types:
-                print(f"Folder doesn't contain type {dtype}")
-                return
+                raise GetObjError(f"Folder doesn't contain type {dtype}")
             return self._dfs[self._types.index(dtype)]
         return self._dfs[0]
     
@@ -128,11 +144,9 @@ class folderProcessor():
     def concat_folder(self) -> pd.DataFrame:
         """Concatenates all dataframes in <self> into one."""
         if len(self._dfs) == 0:
-            print("No dataframes to combine")
-            return
+            raise NoDataframesFoundError()
         if self._types != [self._dfs[0].get_type() for i in range(len(self._types))]:
-            print("Exception: Incompatible data types")
-            return
+            raise IncompatibleDataframes()
         output = self._dfs[0].get_df()
         for df_obj in self._dfs[1:]:
             output = pd.concat([output, df_obj.get_df()], axis=0, ignore_index=False)  
@@ -142,7 +156,7 @@ class folderProcessor():
 # // end class definition
 
 # pure helper (in progress)
-def make_df(path: str, df: pd.DataFrame, dtype: str = None) -> dfObj:
+def make_df(path: str, df: pd.DataFrame, dtype: str = 'Unknown') -> dfObj:
     """Assigns types to dataframe objects based on  pathname or columns."""
     name = os.path.basename(path)
     if "bikeshare" in path:
@@ -154,3 +168,13 @@ def make_df(path: str, df: pd.DataFrame, dtype: str = None) -> dfObj:
     if 'stop_id' in df.columns:
         dtype = "TTCStation"
     return dfObj(name, df, dtype)
+
+# helper
+def get_folder_paths(folder_name: str) -> dict[str, str]:
+    folder_path = os.path.abspath(folder_name)
+    folder_dict = {}
+    for file in os.listdir(folder_path):
+        if file.endswith(".csv"):
+            data_path = os.path.join(folder_path, file)
+            folder_dict[file] = data_path
+    return folder_dict
