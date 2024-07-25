@@ -1,11 +1,14 @@
 from folderProcessor import folderProcessor
-from pd_helpers import df_from_file, get_col_count, get_label, add_col_Periods
+from pd_helpers import df_from_file, get_col_count, get_label, add_col_Periods, get_count_table
 import pandas as pd
 import os
 from gpd_helpers import run_map 
+from makeModel import make_plot_from_df
+import matplotlib.pyplot as plt
 
 TRIPS = "bikeshare-ridership-2023"
 DATA = "other-datasets-2023"
+NEW = "nov_trips_stations_subset_wards_income.csv"
 
 def check_write():
     checker = input("Are you SURE you want to write this file? (y/n) ")
@@ -13,7 +16,7 @@ def check_write():
         return True
     return False
 
-def write_path(title) -> str:
+def directory_path(title) -> str:
     """Returns file path so that saved file goes to the directory
     that holds the repo rather than in the repo."""
     return os.path.join(os.path.dirname(os.getcwd()), title)
@@ -55,7 +58,7 @@ def top_n_stations_dur(df: pd.DataFrame, n: int = 20, write: bool = False) -> pd
     ret = ret.filter(['Start_Station_Id', "End_Station_Id", 'lat_orig', 'lon_orig', 'lat_dest', 'lon_dest', 'count', 'mean_dur'])
     ret = ret.drop_duplicates()
     if write and check_write():
-        file = write_path(f"top_{n}_trips_by_duration.csv")
+        file = directory_path(f"top_{n}_trips_by_duration.csv")
         ret.iloc[0:n].to_csv(file)
     # o = list(check['Start_Station_Id'].iloc[0:4])
     # d = list(check['End_Station_Id'].iloc[0:4])
@@ -70,7 +73,10 @@ def run_nodes(df: pd.DataFrame, top_n: int = 20):
 
 def prepare_nodes(trip_data: str, add_data: str, month: str = '08', subset: bool = True) -> pd.DataFrame:
     """Merges trips data *trip_data* and station data *add_data*.
-    Optionally, specify the month that is processed (August if not)."""
+    Optionally, specify the month that is processed (August if not).
+    Example usage: 
+    >>> df = prepare_nodes(TRIPS, DATA, '11')"""
+    
     bike_data = folderProcessor(trip_data, month)
     data = folderProcessor(folder_name=add_data)
     df = bike_data.combine_merge(data, station_only=True)[0].get_df()
@@ -79,7 +85,7 @@ def prepare_nodes(trip_data: str, add_data: str, month: str = '08', subset: bool
         df = df.loc[df['timeperiod'].isin(['AM', 'PM', 'Midday'])]
         df = df.sample(10000, axis=0)
     if check_write():
-        df.to_csv(write_path(f"{month}-trips-station_xy.csv"), index=False)
+        df.to_csv(directory_path(f"{month}-trips-station_xy.csv"), index=False)
     print(df)
     df.info()
     print(df['timeperiod'].unique())
@@ -92,10 +98,14 @@ def controlled_loop():
     pass 
 
 if __name__ == '__main__':
-    df = prepare_nodes(TRIPS, DATA, '11')
-    
-    
-        
+    df = df_from_file(directory_path(NEW))
+    df.info()
+    print([col for col in df.columns])
+    df = get_count_table(df, bycol = ['WARD_NUMBER'], keep = ['total_low_income', 'Population_2022'])
+    df['prop_low_inc'] = df['total_low_income']/df['Population_2022']
+    make_plot_from_df(df, 'prop_low_inc', 'count', '.')
+    df.plot(x = 'prop_low_inc', y = 'count', kind = 'scatter')
+    plt.show()
 
     
     # Aug top: 7059-7033

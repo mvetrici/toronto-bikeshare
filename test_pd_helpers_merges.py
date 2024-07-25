@@ -1,7 +1,6 @@
-import unittest, os
+import unittest
 from folderProcessor import folderProcessor
-import pandas as pd
-from pd_helpers import station_merge_on_trip
+from pd_helpers import station_merge_on_trip, get_label
 
 TRIPS = "test-bikeshare-ridership-2023"
 DATA = 'other-datasets-2023'
@@ -15,9 +14,13 @@ class Testadd_cols(unittest.TestCase):
         station_merged = station_merge_on_trip(base_df, add_df, remove_extra_col=True)
         print(station_merged)
         station_merged.info()
-        for col in station_merged.columns:
-            print(station_merged[col])
+        for column in station_merged.columns:
+            print(station_merged[column])
 
+    def test_get_label(self):
+        possibles = ['Trip_Id', 'Trip_Duration', 'Start_Station_Id']
+        result = get_label(possibles, 'station id')
+        self.assertEqual(result, None)
 
 if __name__ == '__main__':
     unittest.main()

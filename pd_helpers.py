@@ -28,7 +28,7 @@ MAX_LENGTH = 120 # time in minutes of longest possible trip
 DATETYPES = ['datetime64[ns]', '<M8[ns]']
 
 
-def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
+def df_from_file(path: str, encoding: str = 'cp1252', drop: list[str] = []) -> pd.DataFrame:
     """<path> is a path to a csv file
     <dtype> can be Trip, Weather, BikeStation, TTCStation 
     Cleans dataframe (remove columns and remove NA rows from certain columsn).
@@ -45,24 +45,26 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
     df.columns = df.columns.str.replace('  ', ' ')
     df.columns = df.columns.str.replace(' ', '_')
 
-    # remove BOM and columns with mostly NAs
-    col_drop = ['rental_uris', "obcn", "short_name", 'nearby_distance', '_ride_code_support', 'Climate_ID', 'Station_Name']
-    for col in df.columns:
-        col1 = col.encode('cp1252').decode('utf-8-sig', 'ignore')
-        col1 = re.sub(r'\W+', '', col1)
-        df.rename(columns={col: col1}, inplace=True)
-        
-        # remove unhelpful columns or columns with mostly NAs 
-        remove = col1 in col_drop or 'flag' in col1.lower() or int(df[col1].isna().sum()) > 0.5*len(df) or 'days' in col1.lower() or 'gust' in col1.lower()
-        if remove:
-            df.drop(col1, axis=1, inplace=True)
+    try:
+        # remove BOM and columns with mostly NAs
+        col_drop = ['rental_uris', "obcn", "short_name", 'nearby_distance', '_ride_code_support', 'Climate_ID', 'Station_Name'] + drop
+        for col in df.columns:
+            col1 = col.encode('cp1252').decode('utf-8-sig', 'ignore')
+            col1 = re.sub(r'\W+', '', col1)
+            df.rename(columns={col: col1}, inplace=True)
+            
+            # remove unhelpful columns or columns with mostly NAs 
+            remove = col1 in col_drop or 'flag' in col1.lower() or float(df[col1].isna().sum()) > 0.5*len(df) or 'days' in col1.lower() or 'gust' in col1.lower()
+            if remove:
+                df.drop(col1, axis=1, inplace=True)
 
-        # remove rows with NAs in certain columns
-        row_drop = ["End_Station_Id", 'Min_Temp_C', 'Mean_Temp_C', 'Max_Temp_C']
-        dropna = col1 in row_drop
-        if dropna: 
-            df.dropna(subset=[col1], axis=0, how='any', inplace=True)
-
+            # remove rows with NAs in certain columns
+            row_drop = ["End_Station_Id", 'Min_Temp_C', 'Mean_Temp_C', 'Max_Temp_C']
+            dropna = col1 in row_drop
+            if dropna: 
+                df.dropna(subset=[col1], axis=0, how='any', inplace=True)
+    except TypeError:
+        pass
     shortest = len(df) # used for print statement
 
     try: # reformat weather data specifically
@@ -80,11 +82,11 @@ def df_from_file(path: str, encoding: str = 'cp1252') -> pd.DataFrame:
         df = df.loc[(df["Trip_Duration_min"] <= MAX_LENGTH) 
                     & (df["Trip_Duration_min"] >= 2)]
         df = df.loc[df[startid_label] != df[endid_label]]
-        filtering, shortest = "(with filtering)", len(df)
+        filtering, shortest = " (with filtering)", len(df)
     except InvalidColError:
         pass
     
-    print(orig_length - shortest, "observations were removed", filtering)
+    print(orig_length - shortest, f"observations were removed{filtering}. Final length: {len(df)} rows.")
     df.reset_index(inplace=True, drop=True)
     
     return df
@@ -100,11 +102,30 @@ def get_label_list(possible_labels: Iterable | list[str], column_names: list[str
 def get_label(possible_labels: Iterable | list[str], label: str) -> str:
     """Finds corresponding str <label> among the options
      in <possible_labels>. Does not modify possible_labels."""
-    # TODO use regex
-    bycol = None
-    if label in possible_labels: # option 1
+    
+    # option 1: label is exactly already in dataframe
+    if label in possible_labels:
         return label
     
+    # alternate implementation TODO
+    # for col in possible_labels:
+    #     # splitter = '_' if '_' in label else ' '
+    #     spaced_col = col.replace('_', ' ').strip()
+    #     print('spaced col', spaced_col)
+    #     # Create regex pattern dynamically based on label
+    #     pattern1 = r'\b' + re.escape(label) + r'\b'
+    #     print('pattern1', pattern1)
+    #     pattern2 = r'\b' + re.escape(spaced_col) + r'\b'    
+    #     print('pattern2', pattern2)
+    #     # Match using regex
+    #     if re.search(pattern1, pattern2, flags=re.I):
+    #         print('found column', col)
+    #         return col
+    # else:
+    #     raise InvalidColError(label)
+
+    bycol = None
+
     for col in possible_labels: # check option 2 or 3 to look for column
         splitter = '_' if '_' in label else ' '
         test_list = [int(item in col.lower()) for item in label.split(splitter)]
@@ -146,13 +167,19 @@ def get_col_count(df: pd.DataFrame, bycol: list[str],
         return df.filter(bycol + keep_list + [new_col_name])
     return df
 
-def get_count_table(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count') -> pd.DataFrame:
+def get_count_table(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count', keep: list[str] = []) -> pd.DataFrame:
     """Returns table with columns in <bycol> and their count."""
     bycol= get_label_list(df.columns, bycol)
     df = df.reset_index() # add 'index' column that can be used for count
+    df_to_merge = df.copy()
     df = df.groupby(bycol, observed=False).count().reset_index()
     df.rename({'index': new_col_name}, axis=1, inplace=True)
-    return df.filter(bycol + [new_col_name])
+    print(df.columns)
+    df = df[bycol + [new_col_name]] # equivalent to filtering but that doesn't work
+    if keep:
+        df = pd.merge(left=df, right=df_to_merge[bycol + keep], on=bycol[0], how='left')
+        df.drop_duplicates(inplace=True)
+    return df
 
 # DEPRECATED
 def DEADadd_col(df: pd.DataFrame, names: list[str]):
@@ -300,15 +327,18 @@ def station_merge_on_trip(trips: pd.DataFrame, stations: pd.DataFrame, remove_ex
         to_drop = ['physical_configuration', 'altitude', 'address', 'is_charging_station', 'rental_methods', 'groups', 'post_code']
         stations.drop(to_drop, axis=1, inplace=True)
     
-    st_orig = stations.rename(renamer(stations.columns, '_orig', 'station_id'), axis=1) # don't rename station_id yet
-    st_dest = stations.rename(renamer(stations.columns, '_dest', 'station_id'), axis=1)
-    
     orig_id_label = get_label(trips.columns, 'start station id')
     dest_id_label = get_label(trips.columns, 'end station id')
-    st_orig[orig_id_label] = st_orig['station_id']
-    st_dest[dest_id_label] = st_dest['station_id']
-    st_dest.drop('station_id', axis=1, inplace=True)
-    st_orig.drop('station_id', axis=1, inplace=True)
+
+    st_orig = stations.rename(
+        renamer(stations.columns, '_orig', 'station_id', orig_id_label), 
+        axis=1) # rename columns so merging is easier 
+    st_dest = stations.rename(
+        renamer(stations.columns, '_dest', 'station_id', dest_id_label), 
+        axis=1)
+    
+    # st_orig.rename({'station_id': orig_id_label}, axis=1, inplace=True)
+    # st_dest.rename({'station_id': dest_id_label}, axis=1, inplace=True)
     
     output = pd.merge(st_orig, trips, on=orig_id_label, how='left')
     output = pd.merge(st_dest, output, on=dest_id_label, how='left')
@@ -352,13 +382,18 @@ def station_merge_on_station_for_od(tr: pd.DataFrame, st: pd.DataFrame) -> pd.Da
     return output
 
 # helper
-def renamer(keys: Iterable, addition: str, avoider: str) -> dict:
-    """Renames labels in <keys> (except <avoider>) by combining the 
-    label with <addition>. Returns a dictionary."""
+def renamer(keys: Iterable, addition: str, replaced: str, replacer: str) -> dict:
+    """Renames labels in *keys* by appending the label 
+    with *addition*. Returns a dictionary. *replaced* must be valid
+    in *keys*"""
+    if replaced not in keys:
+        raise InvalidColError(replaced)
     namer = {}
     for key in keys:
-        if key != avoider: 
+        if key != replaced: 
             namer[key] = key + addition
+        else:
+            namer[key] = replacer
     return namer
 
 # pure
