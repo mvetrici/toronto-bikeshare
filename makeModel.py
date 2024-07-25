@@ -366,6 +366,17 @@ def make_plot(dfs: tuple[pd.DataFrame, pd.DataFrame], legend: list[str]):
     plt.legend()
     plt.show()
 
+def make_plot_from_df(df: pd.DataFrame, x_axis: str, y_axis: str, type_: str = '-'):
+    """x and y must be valid columns in df"""
+    plt.figure(figsize=(8, 10))
+    x = df[x_axis]
+    y = df[y_axis]
+    plt.plot(x, y, type_) #label=legend[i], alpha=0.5)
+    plt.legend()
+    plt.xlabel(x_axis)
+    plt.ylabel(y_axis)
+    plt.show()
+
 def concat_tables(trip_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
     months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
     for i in range(len(months)):
