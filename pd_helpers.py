@@ -26,19 +26,6 @@ class NoIndexTypeColumn(Exception):
         self.message = "No index-type column that can be converted to 'count' column"
         super().__init__(self.message)
 
-def get_count_table(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count', keep: list[str] = []) -> pd.DataFrame:
-    """Returns table with rows in *df* grouped by *bycol* and their count."""
-    columns = df.columns
-    bycol= get_label_list(columns, bycol)
-    df = df.reset_index() # add 'index' column that can be used for count
-    df_counts = df.groupby(bycol, observed=False).count().reset_index()
-    df_counts.rename({'index': new_col_name}, axis=1, inplace=True)
-    df_counts = df_counts[bycol + [new_col_name]] # equivalent to filtering
-    if keep:
-        keep = get_label_list(columns, keep)
-        df_counts = pd.merge(left=df_counts, right=df[bycol + keep], on=bycol[0], how='left')
-        df_counts.drop_duplicates(inplace=True)
-    return df_counts
 
 def df_from_file(path: str, encoding: str = 'cp1252', drop: list[str] = []) -> pd.DataFrame:
     """<path> is a path to a csv file
@@ -107,6 +94,20 @@ def df_from_file(path: str, encoding: str = 'cp1252', drop: list[str] = []) -> p
     
     return df
 
+def get_count_table(df: pd.DataFrame, bycol: list[str], new_col_name: str = 'count', keep: list[str] = []) -> pd.DataFrame:
+    """Returns table with rows in *df* grouped by *bycol* and their count."""
+    columns = df.columns
+    bycol= get_label_list(columns, bycol)
+    df = df.reset_index() # add 'index' column that can be used for count
+    df_counts = df.groupby(bycol, observed=False).count().reset_index()
+    df_counts.rename({'index': new_col_name}, axis=1, inplace=True)
+    df_counts = df_counts[bycol + [new_col_name]] 
+    if keep:
+        keep = get_label_list(columns, keep)
+        df_counts = pd.merge(left=df_counts, right=df[bycol + keep], on=bycol[0], how='left')
+        df_counts.drop_duplicates(inplace=True)
+    return df_counts
+
 # Pure
 def get_label_list(possible_labels: Iterable, testing_labels: list[str]) -> list[str]:
     new_labels = testing_labels.copy()
@@ -135,6 +136,9 @@ def get_label(possible_labels: Iterable, label: str) -> str:
         if current_match:
             return possible_label
     raise InvalidColError(label)
+
+
+# FUNCTIONS TO ADD COLUMNS
 
 # MUTATES
 def add_col_Periods(df: pd.DataFrame, columns: list[str]) -> list[str]:
@@ -239,6 +243,9 @@ def calculate_cost(row, user_col: str, dur_col: str):
     if user_type == 'Casual Member':
         return 1 + 0.12*row[dur_col]/60 
     return 0.3 # user is Annual Member
+
+
+# MERGING FUNCTIONS
 
 # pure
 def station_merge_on_trip(trips: pd.DataFrame, stations: pd.DataFrame) -> pd.DataFrame:

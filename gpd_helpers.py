@@ -4,9 +4,6 @@ from typing import Iterable
 import os, re
 import matplotlib.pyplot as plt
 COLORS = ['yellow', 'orange', 'green', 'red', 'purple', 'brown', 'pink', 'gray', 'cyan', 'olive', 'magenta', 'lime', 'teal', 'indigo', 'maroon', 'navy', 'aquamarine', 'turquoise', 'silver', 'gold'] 
-TRIPS = "bikeshare-ridership-2023"
-JANTRIPS = r"Bike share ridership 2023-01.csv"
-DATA = 'other-datasets-2023'
 LTS = "lts_jan2024.shp"
 
 def get_coordinate(lat: Iterable[float], long: Iterable[float]):
