@@ -2,14 +2,10 @@ import pandas as pd
 import os
 from dfObj import dfObj
 from pd_helpers import df_from_file, IncompatibleDataframes
+from file_interactors import get_folder_paths, PathNotFound
 
 # user-defined types of datasets
 TYPES = ["Trip", 'Weather', "BikeStation", "TTCStation"] # or combination joined by -
-
-class PathNotFound(Exception):
-    def __init__(self, attempted_month):
-        self.message = f"Data path to month {attempted_month} could not be found"
-        super().__init__(self.message)
 
 class GetObjError(Exception):
     def __init__(self, message):
@@ -115,12 +111,6 @@ class folderProcessor():
             ret += str(df_obj)
         return ret
     
-    def getinfo(self):
-        for df_obj in self._dfs:
-            print(df_obj.name)
-            df_obj.getinfo()
-        return
-    
     def get_obj(self, index: int = 0, dtype: str = '') -> dfObj:
         """index or type must be valid. Valid types:
         "Trip", 'Weather', "BikeStation", 'TTCStation'"""
@@ -168,13 +158,3 @@ def make_df(path: str, df: pd.DataFrame, dtype: str = 'Unknown') -> dfObj:
     if 'stop_id' in df.columns:
         dtype = "TTCStation"
     return dfObj(name, df, dtype)
-
-# helper
-def get_folder_paths(folder_name: str) -> dict[str, str]:
-    folder_path = os.path.abspath(folder_name)
-    folder_dict = {}
-    for file in os.listdir(folder_path):
-        if file.endswith(".csv"):
-            data_path = os.path.join(folder_path, file)
-            folder_dict[file] = data_path
-    return folder_dict

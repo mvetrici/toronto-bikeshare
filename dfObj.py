@@ -66,11 +66,6 @@ class dfObj():
         
         new_name = f'merge-{add_df._dtype}-{self.name.split('.')[0]}'
         new_dtype = self._dtype + '-' + add_df._dtype 
-
-        # TODO! remove duplicated columns
-        for col in new_df.columns: 
-            if col.endswith('_y'):
-                new_df.drop(col, axis=1, inplace=True)
         
         new_obj = dfObj(new_name, new_df, new_dtype)
         return new_obj
