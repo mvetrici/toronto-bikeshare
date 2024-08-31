@@ -9,14 +9,14 @@ JANTRIPS = r"Bike share ridership 2023-01.csv"
 DATA = 'other-datasets-2023'
 COLOURS = ['lightsteelblue', 'bisque', 'turquoise', 'khaki', 'salmon', 'peachpuff', 'pink', 'lightcoral', 'thistle']
 
-# theoretically works
+# uses wrapper in bike_trips_interactors
 def duration_distribution(df: pd.DataFrame, 
                           most_common_pairs: pd.DataFrame, 
                           title: str = '', 
                           group_by_period: bool = False):
     """Plots distribution of trip durations among n 
     most_common_pairs of stations. Does not modify 
-    dataframes. df is trip-station data"""    
+    dataframes. df is trip or trip-station data"""    
     df = df.copy()
     if group_by_period:
         add_col_Periods(df, ['timeperiod']) # copy was made so original is not modified
@@ -35,31 +35,23 @@ def duration_distribution(df: pd.DataFrame,
     for i in range(num_plots):
         start, end = o[i], d[i]
         hist_i = durations.loc[lambda durations: (durations['Start_Station_Id'] == start) & (durations['End_Station_Id'] == end)]
-        # if groupby:
-        #     data = hist_i[['Trip_Duration_min', groupby]]
-        #     data.to_csv('test_w_gpt.csv', index=False)
-        # else:
         data = hist_i['Trip_Duration_min']
         
         axs[i//2][i%2].hist(data, bins=30, alpha=0.5, color='b', label=f"{start}-{end}")
         axs[i//2][i%2].set_title(f'{start} and {end}')
-        # axs[i%2][int(i in [0, 1])].set_xlabel('Duration (min)')
-        # axs[i//2][i%2].set_ylabel('Frequency')
-        # axs[i].legend()
     
-    # plt.legend()
     if title:
         title = ' for month: ' + title
     plt.suptitle("Durations (mins)" + title) # plt.tight_layout()
     plt.ylabel("Frequency")
     plt.show()
 
-# in progress
+# stand-alone
 def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = ''):
-    """Plots ONE layered distribution of trip durations between <num_pairs> most common station pairs.
+    """Plots ONE layered histogram of trip durations between *num_pairs* most common station pairs.
     Does not modify dataframes.
-    If <num_pairs> > 1, will create new windows.
-    df must represent trips, and include columns: start id, end id, trip duration"""    
+    If *num_pairs* > 1, will create new windows.
+    *df* must represent trips, and include columns: start id, end id, trip duration"""    
     df = df.copy()
     if groupby and groupby not in df.columns:
         add_col_Periods(df, [groupby])
@@ -97,7 +89,7 @@ def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = ''):
         plt.legend()
     plt.show()
 
-
+# helper
 def minutes_since_midnight(timestamp, interval_size: int = 60) -> float:
     """Returns number of minutes between timestamp and midnight
     OLD: If interval_size is specified (in minutes), returns the number
@@ -109,6 +101,7 @@ def minutes_since_midnight(timestamp, interval_size: int = 60) -> float:
     # for 60-min intervals: (min_since_midnight//60)*60 
     return (min_since_midnight // interval_size) * interval_size
 
+# helper
 def trips_per_interval(df: pd.DataFrame, datetime_col: str, interval_size: int = 60) -> pd.DataFrame: 
     """add "<interval_size>_minute" column which represents the number of
     <interval_size> length intervals from 12 am (regardless of day)
@@ -126,6 +119,7 @@ def trips_per_interval(df: pd.DataFrame, datetime_col: str, interval_size: int =
 
     return ret
 
+# helper
 def trips_per_interval_stacker(df: pd.DataFrame, interval_sizes: list[int], weekdays: str = '', extra_label: str = ''):
     """Plots multiple lines from trips_per_interval(), by user type and interval size. 
     *df* must have a "start time" column. 
@@ -162,7 +156,7 @@ def trips_per_interval_stacker(df: pd.DataFrame, interval_sizes: list[int], week
         # legend.append(f"Casual, {int_size}-min intervals")
         if len(annual_data) > 1:
             annual_i = trips_per_interval(annual_data, start_time, int_size)
-            # plt.plot(annual_i[annual_i.columns[0]], annual_i[annual_i.columns[1]], '-', label=f"Annual, {int_size}-min intervals")
+            plt.plot(annual_i[annual_i.columns[0]], annual_i[annual_i.columns[1]], '-', label=f"Annual, {int_size}-min intervals")
         else:
             print("no data for annual members")
 
@@ -229,8 +223,3 @@ def make_plot_from_df(df: pd.DataFrame, x_axis: str, y_axis: str, type_: str = '
     plt.ylabel(y_axis)
     plt.title(f"{y_axis} vs {x_axis}")
     plt.show()
-
-
-
-if __name__ == '__main__':
-    pass

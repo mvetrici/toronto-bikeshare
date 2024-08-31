@@ -7,7 +7,6 @@ from bike_trip_interactors import get_trip_station
 TRIPS = "test-bikeshare-ridership-2023"
 DATA = 'other-datasets-2023'
 
-@unittest.skip("Skip")
 class Testadd_cols(unittest.TestCase):
 
     def test_station_merge_on_trip(self):

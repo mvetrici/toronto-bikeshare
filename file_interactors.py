@@ -2,9 +2,6 @@ import os, re
 from pd_helpers import df_from_file
 import pandas as pd
 
-TRIPS = "test-bikeshare-ridership-2023"
-DATA = 'other-datasets-2023'
-
 class PathNotFound(Exception):
     def __init__(self, attempted_file):
         """attempted_file can also be a month"""
@@ -84,6 +81,7 @@ def file_from_type(folder_name: str, file_type: str) -> str:
             return file
     raise PathNotFound(file_type)
 
+# helper
 def get_file_type(file_name: str):
     # pure helper (in progress)
     """Assigns types to dataframe objects based on  pathname."""

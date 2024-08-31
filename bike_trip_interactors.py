@@ -1,3 +1,6 @@
+# code for running various files, od matrices, 
+# maps with Python, and wrappers for pd_stats.py, and visualizations
+
 from file_interactors import get_trip_file, get_file_from_folder, check_write
 from pd_helpers import station_merge_on_trip, station_merge_on_id, \
     station_merge_on_station_for_od
@@ -7,15 +10,18 @@ from bike_trips_graphs import duration_distribution
 import matplotlib.pyplot as plt
 MONTHS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
-def get_trip_station(trip_folder: str, data_folder: str, month: str = '08', od: bool = False):
+def get_trip_station(trip_folder: str, data_folder: str, month: str = '08'):
     """Merges trip and station data. Finds od if od == True"""
     trips = get_trip_file(folder_name=trip_folder, month=month)
     stations = get_file_from_folder(data_folder, file_type='BikeStation')
-    if od:
-        ods = station_merge_on_station_for_od(trips, stations)
-        check_write(ods)
-        return ods 
     return station_merge_on_trip(trips, stations)
+
+def get_ods(trip_folder: str, data_folder: str, month: str = '08'):
+    trips = get_trip_file(folder_name=trip_folder, month=month)
+    stations = get_file_from_folder(data_folder, file_type='BikeStation')
+    ods = station_merge_on_station_for_od(trips, stations)
+    check_write(ods, f"od matrix for month {month}")
+    return ods 
 
 def gpd_map(trip_folder: str, data_folder: str, month: str = '01'):
     """Maps trips from trip_folder with station locations in data_folder"""
@@ -48,7 +54,6 @@ def top_n_stationpairs_wrapper(trip_folder: str, n: int = 10):
     if n <= 100:
         prev.plot(kind='bar')
         plt.show()
-
 
 def top_n_stations_wrapper(trip_folder: str, data_folder: str, n: int = 10):
     """Outputs csv file with top n stations based on trip origin count

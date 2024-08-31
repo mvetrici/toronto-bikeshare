@@ -30,9 +30,6 @@ class TestPure(unittest.TestCase):
 
 class TestMain(unittest.TestCase):
     def setUp(self):
-        # base_df = folderProcessor(TRIPS).get_obj().get_df() 
-        # add_df = folderProcessor(DATA).get_obj(dtype='BikeStation').get_df()
-        # self.trip_station = station_merge_on_trip(base_df, add_df)
         base_df = get_trip_file(TRIPS, 'mini')
         add_df = get_file_from_folder(DATA, file_type='BikeStation')
         self.trip_station = station_merge_on_trip(base_df, add_df)

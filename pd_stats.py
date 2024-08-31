@@ -24,9 +24,10 @@ def top_n_stationpairs(df: pd.DataFrame, n: int, filter_day: Any = False, new_co
 
 def top_n_stations(df: pd.DataFrame, n: int, filter_day: Any = False, new_col_name: str = 'count', o_or_d: str = 'start') -> pd.DataFrame:
     """
-    Returns dataframe with n most common stations and their trip count
-    (either origin or destination stations based on *o_or_d*)
-    *df* must be trip data (optionally with station information like lat/lon)
+    Returns dataframe with n most common stations by trip count 
+    and their trip count (either origin or destination stations
+    based on *o_or_d*). *df* must be trip data 
+    (optionally with station information like lat/lon). 
     if n > number of trips in the dataset, all trips are counted in the trip count.
     """
     if re.search(r'start', o_or_d, flags=re.I) or re.search(r'origin', o_or_d, flags=re.I):
@@ -60,8 +61,8 @@ def busiest_day(df: pd.DataFrame):
     return sorted_trips[date_col].iloc[0]
 
 def run_nodes(df: pd.DataFrame, top_n: int = 20):
-    """Converts *df* to station and plots them;
-    *df* is trips with merged geo data."""
+    """Finds top stations in *df* and plots them;
+    *df* is trips with merged lat/lon data."""
     nodes = top_n_stations(df, n=top_n)
     run_map(nodes) 
     return 
