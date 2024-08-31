@@ -1,7 +1,7 @@
 import unittest, os
 from folderProcessor import folderProcessor
 import pandas as pd
-from pd_helpers import get_col_count, df_from_file, \
+from pd_helpers import df_from_file, \
     get_datetime_col, add_col_Date, add_col_Datetime, add_col_Periods, \
     get_count_table
 

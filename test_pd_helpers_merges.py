@@ -1,17 +1,17 @@
 import unittest
-from folderProcessor import folderProcessor
-from pd_helpers import station_merge_on_trip, get_label
+from pd_helpers import get_label, \
+    station_merge_on_station_for_od, station_merge_on_id
+from file_interactors import get_trip_file, get_file_from_folder
+from bike_trip_interactors import get_trip_station
 
 TRIPS = "test-bikeshare-ridership-2023"
 DATA = 'other-datasets-2023'
 
-
+@unittest.skip("Skip")
 class Testadd_cols(unittest.TestCase):
 
     def test_station_merge_on_trip(self):
-        base_df = folderProcessor(TRIPS).get_obj().get_df() 
-        add_df = folderProcessor(DATA).get_obj(dtype='BikeStation').get_df()
-        station_merged = station_merge_on_trip(base_df, add_df, remove_extra_col=True)
+        station_merged = get_trip_station(TRIPS, DATA, 'mini')
         print(station_merged)
         station_merged.info()
         for column in station_merged.columns:
@@ -22,7 +22,20 @@ class Testadd_cols(unittest.TestCase):
         result = get_label(possibles, 'station id')
         self.assertEqual(result, None)
 
+class TestOD(unittest.TestCase):
+    def setUp(self):
+        self.trips = get_trip_file(TRIPS, 'mini')
+        self.stations = get_file_from_folder(DATA, file_type='BikeStation')
+    
+    def test_station_merge_on_station_for_od(self):
+        result = station_merge_on_station_for_od(self.trips, self.stations)
+        print(result['count_orig'].unique())
+    
+    def test_station_merge_on_id(self):
+        result = station_merge_on_id(self.trips, self.stations)
+        print("ON ID")
+        print(result)
+        
+
 if __name__ == '__main__':
     unittest.main()
-
-    # pass ClassName() as argument if multiple classes

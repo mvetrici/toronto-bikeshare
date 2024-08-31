@@ -1,14 +1,13 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from pd_helpers import get_label, add_col_Datetime, add_col_Periods, add_col_Date, \
-    get_label_list, add_col_Weather, add_col_Cost, InvalidColError, get_count_table
+from pd_helpers import get_label, add_col_Datetime, add_col_Periods, \
+    add_col_Date, get_label_list, InvalidColError, get_count_table
 
 TRIPS = "bikeshare-ridership-2023"
 JANTRIPS = r"Bike share ridership 2023-01.csv"
 DATA = 'other-datasets-2023'
 COLOURS = ['lightsteelblue', 'bisque', 'turquoise', 'khaki', 'salmon', 'peachpuff', 'pink', 'lightcoral', 'thistle']
-
 
 # theoretically works
 def duration_distribution(df: pd.DataFrame, 
@@ -87,7 +86,7 @@ def dura_dist_oneplot(df: pd.DataFrame, num_pairs: int = 4, groupby: str = ''):
             for label in hist_i[groupby].unique():
                 data_i = hist_i.loc[hist_i[groupby] == label][trip_dur]
                 mean_ = round(data_i.mean(), 2)
-                plt.hist(data_i, bins=bins, density=True, alpha=0.5, label=f"{label}: {mean_} min", color=COLOURS[j])
+                plt.hist(data_i, bins=bins, density=True, alpha=0.5, label=f"{label}: {mean_} min", color=COLOURS[j]) # type: ignore
                 j += 1
         else:
             data = hist_i[trip_dur]
@@ -114,14 +113,12 @@ def trips_per_interval(df: pd.DataFrame, datetime_col: str, interval_size: int =
     """add "<interval_size>_minute" column which represents the number of
     <interval_size> length intervals from 12 am (regardless of day)
     Note: interval_size default = 60 min (1 hour)
-    <df> must have a "start time" column
-    ONLY WEEKDAYS"""
+    *df* must have a "start time" column"""
     interval_label = f"{interval_size}_minute"
     max_value = 24*60
 
     # filter for weekdays, then add new colum
-    df[interval_label] = df[datetime_col].apply(minutes_since_midnight, args=(interval_size,))
-    df[interval_label] = df[interval_label].astype(int)
+    df[interval_label] = df[datetime_col].apply(minutes_since_midnight, args=(interval_size,)).astype(int)
     grouped_df = get_count_table(df, bycol=[interval_label], new_col_name='count')
     grouped_df['count'] = grouped_df['count'] / interval_size
     merger = pd.DataFrame({interval_label: np.arange(0, max_value, interval_size)})
@@ -131,8 +128,8 @@ def trips_per_interval(df: pd.DataFrame, datetime_col: str, interval_size: int =
 
 def trips_per_interval_stacker(df: pd.DataFrame, interval_sizes: list[int], weekdays: str = '', extra_label: str = ''):
     """Plots multiple lines from trips_per_interval(), by user type and interval size. 
-    <df> must have a "start time" column
-    <weekdays> can be 'weekday' or 'weekend'
+    *df* must have a "start time" column. 
+    *weekdays* can be 'weekday' or 'weekend'
     """
     # split data into two, one for each groupby group
     max_value = 24*60
@@ -165,8 +162,7 @@ def trips_per_interval_stacker(df: pd.DataFrame, interval_sizes: list[int], week
         # legend.append(f"Casual, {int_size}-min intervals")
         if len(annual_data) > 1:
             annual_i = trips_per_interval(annual_data, start_time, int_size)
-            plt.plot(annual_i[annual_i.columns[0]], annual_i[annual_i.columns[1]], '-', label=f"Annual, {int_size}-min intervals")
-            # legend.append(f"Annual, {int_size}-min intervals")
+            # plt.plot(annual_i[annual_i.columns[0]], annual_i[annual_i.columns[1]], '-', label=f"Annual, {int_size}-min intervals")
         else:
             print("no data for annual members")
 
@@ -183,34 +179,30 @@ def trips_per_interval_stacker(df: pd.DataFrame, interval_sizes: list[int], week
     plt.xticks(nums, labels=labels)
     plt.xlabel('Hour')
     plt.legend() # legend
-    plt.title(f'Trips taken in 24 hours ({extra_label}, {weekdays})')
+    if extra_label:
+        extra_label += ', '
+    plt.title(f'Trips taken in 24 hours ({extra_label}{weekdays})')
 
-def run_dura_dist_oneplot(trip_data):
-    trips_folder = folderProcessor(trip_data)
-    df = trips_folder.get_obj().get_df()
-    # dfs = trips_folder.get_dfs()
-    df = trips_folder.concat_folder()
-    # print(df)
-    df_casual = df.loc[df['User_Type'] == 'Casual Member']
-    df_annual = df.loc[df['User_Type'] == 'Annual Member']
-    # print(df_casual)
-    # print(df_annual)
+def run_dura_dist_oneplot(trip_df: pd.DataFrame):
+    """trip_df represents trip data"""
+    df_casual = trip_df.loc[trip_df['User_Type'] == 'Casual Member']
+    df_annual = trip_df.loc[trip_df['User_Type'] == 'Annual Member']
     dura_dist_oneplot(df_casual, num_pairs=1, groupby='timeperiod')
     dura_dist_oneplot(df_annual, num_pairs=1, groupby='timeperiod')
 
-def trips_per_day(df: pd.DataFrame, use_custom_label: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Returns trips per day. <df> must have a column that can be coerced
+def trips_per_day(trip_df: pd.DataFrame, use_custom_label: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Returns trips per day. *df* must have a column that can be coerced
     to a datetime dtype."""
-    start_time = add_col_Date(df) # finds Datetime column
-    casual_data = df.loc[df['User_Type'] == 'Casual Member']
-    annual_data = df.loc[df['User_Type'] == 'Annual Member']
+    start_time = add_col_Date(trip_df) # finds Datetime column
+    casual_data = trip_df.loc[trip_df['User_Type'] == 'Casual Member']
+    annual_data = trip_df.loc[trip_df['User_Type'] == 'Annual Member']
     if use_custom_label:
-        new_col_name = df[start_time].dt.strftime("%B").unique()[0]
+        new_col_name = trip_df[start_time].dt.strftime("%B").unique()[0]
     else:
         new_col_name = ''
     casual_counts = get_count_table(casual_data, ['date'], new_col_name=new_col_name)
     annual_counts = get_count_table(annual_data, ['date'], new_col_name=new_col_name)
-    merger = pd.DataFrame({'date': list(df['date'].unique())})
+    merger = pd.DataFrame({'date': list(trip_df['date'].unique())})
     casual_counts = casual_counts.merge(right=merger, how='right', on='date').fillna(0)
     annual_counts = annual_counts.merge(right=merger, how='right', on='date').fillna(0)
     print(casual_counts)
@@ -238,25 +230,7 @@ def make_plot_from_df(df: pd.DataFrame, x_axis: str, y_axis: str, type_: str = '
     plt.title(f"{y_axis} vs {x_axis}")
     plt.show()
 
-def concat_tables(trip_path: str) -> tuple[pd.DataFrame, pd.DataFrame]:
-    months = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
-    for i in range(len(months)):
-        month = months[i]
-        trip_data = folderProcessor(trip_path, month).get_obj().get_df()
-        if i > 0:
-            curr_casual, curr_annual = trips_per_day(trip_data)
-            prev_casual = pd.concat([prev_casual, curr_casual])
-            prev_annual = pd.concat([prev_annual, curr_annual])
-        else:
-            prev_casual, prev_annual = trips_per_day(trip_data)
-    return prev_casual, prev_annual
+
 
 if __name__ == '__main__':
-    # trip_data = folderProcessor(TRIPS).concat_folder()
-    # trips_per_interval(trip_data, interval_size=10)
-        #trips_per_interval_stacker(df=trip_data, interval_sizes=[15], extra_label=month, weekdays='weekday')
-    # trip_data = folderProcessor(TRIPS, '08').get_obj().get_df()
-    concated = concat_tables(TRIPS)
-    print(concated)
-    make_plot(concated, ['Casual', "Annual"])
-    # plt.show()
+    pass
